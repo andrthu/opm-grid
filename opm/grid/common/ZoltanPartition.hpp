@@ -52,7 +52,7 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& grid,
                                const std::vector<const OpmWellType*> * wells,
                                const double* transmissibilities,
                                const CollectiveCommunication<MPI_Comm>& cc,
-                               int root);
+                               bool useTransWeights, int root);
 }
 }
 #endif // HAVE_ZOLTAN

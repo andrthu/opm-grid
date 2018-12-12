@@ -132,7 +132,7 @@ public:
     CombinedGridWellGraph(const Dune::CpGrid& grid,
                           const std::vector<const OpmWellType*> * wells,
                           const double* transmissibilities,
-                          bool pretendEmptyGrid);
+                          bool pretendEmptyGrid, bool useTransWeights);
 
     /// \brief Access the grid.
     const Dune::CpGrid& getGrid() const
@@ -147,7 +147,8 @@ public:
 
     double transmissibility(int face_index) const
     {
-        return transmissibilities_ ? (1.0e18*transmissibilities_[face_index]) : 1;
+	double edgeWeight = useTransWeights_ ? (1.0e18*transmissibilities_[face_index]) : 1.0;
+        return transmissibilities_ ? edgeWeight : 1.0;
     }
 
     const WellConnections& getWellConnections() const
@@ -174,11 +175,12 @@ private:
         }
     }
 
-
+    
     const Dune::CpGrid& grid_;
     GraphType wellsGraph_;
     const double* transmissibilities_;
     WellConnections well_indices_;
+    bool useTransWeights_;
 };
 
 
