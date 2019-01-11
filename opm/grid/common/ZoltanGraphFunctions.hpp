@@ -151,6 +151,12 @@ public:
         return transmissibilities_ ? edgeWeight : 1.0;
     }
 
+    double logTransmissibilityWeights(int face_index) const
+    {
+	double trans transmissibilities_[face_index]; 
+	return trans==0 ? 1.0 : 1.0 + std::log(trans) - min_log;
+    } 
+
     const WellConnections& getWellConnections() const
     {
         return well_indices_;
@@ -175,12 +181,34 @@ private:
         }
     }
 
-    
+    void findMaxMinTrans()
+    {
+	double min_val = std::numeric_limits<float>::max();
+	double max_val = 0.0;
+	
+	for (int face = 0; face < getGrid().numFaces(); ++face)
+	{
+	    double trans = transmissibilities_[face];
+	    if (trans > 0)
+	    {
+		if (trans < min_val)
+		    min_val = trans;
+		if (trans > max_val)
+		    max_val = trans;
+	    }
+	}
+	trans_max_ = max_val;
+	trans_min_ = min_val;
+	log_min_ = std::log(trans_min);
+    }
     const Dune::CpGrid& grid_;
     GraphType wellsGraph_;
     const double* transmissibilities_;
     WellConnections well_indices_;
     bool useTransWeights_;
+    double trans_max_;
+    double trans_min_;
+    double log_min_;
 };
 
 
