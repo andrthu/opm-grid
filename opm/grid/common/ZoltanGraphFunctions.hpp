@@ -132,7 +132,7 @@ public:
     CombinedGridWellGraph(const Dune::CpGrid& grid,
                           const std::vector<const OpmWellType*> * wells,
                           const double* transmissibilities,
-                          bool pretendEmptyGrid, bool useTransWeights);
+                          bool pretendEmptyGrid, int edgeWeightsMethod);
 
     /// \brief Access the grid.
     const Dune::CpGrid& getGrid() const
@@ -144,18 +144,34 @@ public:
     {
         return wellsGraph_;
     }
+    
+    const std::vector<int>& getVertexWeights() const
+    {
+	return vertexWeights_;
+    }
 
     double transmissibility(int face_index) const
     {
-	double edgeWeight = useTransWeights_ ? (1.0e18*transmissibilities_[face_index]) : 1.0;
-        return transmissibilities_ ? edgeWeight : 1.0;
+	return transmissibilities_ ? 1.0e18*transmissibilities_[face_index] : 1.0;
     }
 
     double logTransmissibilityWeights(int face_index) const
     {
-	double trans transmissibilities_[face_index]; 
-	return trans==0 ? 1.0 : 1.0 + std::log(trans) - min_log;
-    } 
+	double trans = transmissibilities_[face_index]; 
+	return trans == 0.0 ? 1.0 : 1.0 + std::log(trans) - log_min_;
+    }
+
+    double edgeWeight(int face_index) const
+    {
+	if (edgeWeightsMethod_ == 0)
+	    return 1.0;
+	else if (edgeWeightsMethod_ == 1)
+	    return transmissibility(face_index);
+	else if (edgeWeightsMethod_ == 2)
+	    return logTransmissibilityWeights(face_index);
+	else
+	    return 1.0;
+    }
 
     const WellConnections& getWellConnections() const
     {
@@ -199,13 +215,32 @@ private:
 	}
 	trans_max_ = max_val;
 	trans_min_ = min_val;
-	log_min_ = std::log(trans_min);
+	log_min_ = std::log(trans_min_);
     }
+    void calculateVertexWeights()
+    {
+	auto& globalIdSet = grid_.globalIdSet();
+	vertexWeights_.resize(grid_.numCells(), 0);
+	
+	int idx = 0;
+	for (auto cell = grid_.leafbegin<0>(); cell != grid_.leafend<0>(); 
+	     ++cell)
+	{
+	    int cid = globalIdSet.id(*cell);
+	    vertexWeights_[idx] = grid_.numCellFaces(cid) + 1;
+	    vertexWeights_[idx] += wellsGraph_[cid].size();
+	    
+	    idx++;
+	}
+    }
+
     const Dune::CpGrid& grid_;
     GraphType wellsGraph_;
     const double* transmissibilities_;
     WellConnections well_indices_;
-    bool useTransWeights_;
+    int edgeWeightsMethod_;
+    std::vector<int> vertexWeights_;
+    //bool useTransWeights_;
     double trans_max_;
     double trans_min_;
     double log_min_;

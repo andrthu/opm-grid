@@ -64,10 +64,46 @@ void getCpGridVertexList(void* cpGridPointer, int numGlobalIdEntries,
         *err = ZOLTAN_FATAL;
         return;
     }
+    
+    int idx = 0;
+    for (auto cell = grid.leafbegin<0>(), cellEnd = grid.leafend<0>();
+         cell != cellEnd; ++cell)
+    {	
+        gids[idx]   = globalIdSet.id(*cell);
+        lids[idx++] = localIdSet.id(*cell);
+    }
+    *err = ZOLTAN_OK;
+}
+
+void getCpGridWellsVertexList(void* graphPointer, int numGlobalIdEntries,
+			      int numLocalIdEntries, ZOLTAN_ID_PTR gids,
+			      ZOLTAN_ID_PTR lids, int wgtDim,
+			      float *objWgts, int *err)
+{
+    //(void) wgtDim; (void) objWgts;
+    const CombinedGridWellGraph& graph =
+        *static_cast<CombinedGridWellGraph*>(graphPointer);
+    const Dune::CpGrid&  grid = graph.getGrid();
+    
+    auto& globalIdSet         =  grid.globalIdSet();
+    auto& localIdSet          =  grid.localIdSet();
+
+    if ( numGlobalIdEntries != numLocalIdEntries || numGlobalIdEntries != 1 )
+    {
+        std::cerr<<"numGlobalIdEntries="<<numGlobalIdEntries<<" numLocalIdEntries="<<numLocalIdEntries<<" grid cells="
+                 <<grid.numCells()<<std::endl;
+        *err = ZOLTAN_FATAL;
+        return;
+    }
+    auto vertexWeights = graph.getVertexWeights(); 
     int idx = 0;
     for (auto cell = grid.leafbegin<0>(), cellEnd = grid.leafend<0>();
          cell != cellEnd; ++cell)
     {
+	if (wgtDim == 1)
+	{
+	    objWgts[idx] = vertexWeights[idx];
+	}
         gids[idx]   = globalIdSet.id(*cell);
         lids[idx++] = localIdSet.id(*cell);
     }
@@ -118,9 +154,9 @@ void getCpGridNumEdgesList(void *cpGridPointer, int sizeGID, int sizeLID,
 }
 
 void getCpGridWellsNumEdgesList(void *graphPointer, int sizeGID, int sizeLID,
-                           int numCells,
-                           ZOLTAN_ID_PTR globalID, ZOLTAN_ID_PTR localID,
-                           int *numEdges, int *err)
+				int numCells,
+				ZOLTAN_ID_PTR globalID, ZOLTAN_ID_PTR localID,
+				int *numEdges, int *err)
 {
     (void) globalID;
     const CombinedGridWellGraph& graph =
@@ -158,10 +194,11 @@ void getCpGridWellsNumEdgesList(void *graphPointer, int sizeGID, int sizeLID,
 }
 
 void getNullEdgeList(void *cpGridPointer, int sizeGID, int sizeLID,
-                       int numCells, ZOLTAN_ID_PTR globalID, ZOLTAN_ID_PTR localID,
-                       int *numEdges,
-                       ZOLTAN_ID_PTR nborGID, int *nborProc,
-                       int wgtDim, float *ewgts, int *err)
+		     int numCells, ZOLTAN_ID_PTR globalID, 
+		     ZOLTAN_ID_PTR localID,
+		     int *numEdges,
+		     ZOLTAN_ID_PTR nborGID, int *nborProc,
+		     int wgtDim, float *ewgts, int *err)
 {
     (void) cpGridPointer; (void) sizeGID; (void) sizeLID; (void) numCells;
     (void) globalID; (void) localID; (void) numEdges; (void) nborGID;
@@ -290,7 +327,7 @@ void getCpGridWellsEdgeList(void *graphPointer, int sizeGID, int sizeLID,
                     if ( wellEdges.find(otherCell) == wellEdges.end() )
                     {
                         nborGID[idx] = globalID[otherCell];
-                        ewgts[idx++] = graph.transmissibility(face);
+                        ewgts[idx++] = graph.edgeWeight(face);
                     }
                     continue;
                 }
@@ -298,7 +335,7 @@ void getCpGridWellsEdgeList(void *graphPointer, int sizeGID, int sizeLID,
             if ( wellEdges.find(otherCell) == wellEdges.end() )
             {
                 nborGID[idx] = globalID[otherCell];
-                ewgts[idx++] = graph.transmissibility(face);
+                ewgts[idx++] = graph.edgeWeight(face);
             }
         }
 #ifndef NDEBUG
@@ -333,8 +370,9 @@ void getCpGridWellsEdgeList(void *graphPointer, int sizeGID, int sizeLID,
 CombinedGridWellGraph::CombinedGridWellGraph(const CpGrid& grid,
                                              const std::vector<const OpmWellType*> * wells,
                                              const double* transmissibilities,
-                                             bool pretendEmptyGrid, bool useTransWeights)
-    : grid_(grid), transmissibilities_(transmissibilities), useTransWeights_(useTransWeights)
+                                             bool pretendEmptyGrid, 
+					     int edgeWeightsMethod)
+    : grid_(grid), transmissibilities_(transmissibilities), edgeWeightsMethod_(edgeWeightsMethod)
 {
     if ( pretendEmptyGrid )
     {
@@ -353,6 +391,11 @@ CombinedGridWellGraph::CombinedGridWellGraph(const CpGrid& grid,
     well_indices_.init(*wells, cpgdim, cartesian_to_compressed);
     std::vector<int>().swap(cartesian_to_compressed); // free memory.
     addCompletionSetToGraph();
+    if (edgeWeightsMethod_ == 2)
+	findMaxMinTrans();
+    if (true)
+	calculateVertexWeights();
+
 }
 
 void setCpGridZoltanGraphFunctions(Zoltan_Struct *zz, const Dune::CpGrid& grid,
@@ -391,7 +434,7 @@ void setCpGridZoltanGraphFunctions(Zoltan_Struct *zz,
     {
         CombinedGridWellGraph* graphPointer = const_cast<CombinedGridWellGraph*>(&graph);
         Zoltan_Set_Num_Obj_Fn(zz, getCpGridNumCells, gridPointer);
-        Zoltan_Set_Obj_List_Fn(zz, getCpGridVertexList, gridPointer);
+        Zoltan_Set_Obj_List_Fn(zz, getCpGridWellsVertexList, graphPointer);
         Zoltan_Set_Num_Edges_Multi_Fn(zz, getCpGridWellsNumEdgesList, graphPointer);
         Zoltan_Set_Edge_List_Multi_Fn(zz, getCpGridWellsEdgeList, graphPointer);
     }

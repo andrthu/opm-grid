@@ -34,7 +34,7 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
                                const std::vector<const OpmWellType*> * wells,
                                const double* transmissibilities,
                                const CollectiveCommunication<MPI_Comm>& cc,
-                               bool useTransWeights, int root)
+                               int weightsMethod, bool useObjWgt, int root)
 {
     int rc = ZOLTAN_OK - 1;
     float ver = 0;
@@ -50,7 +50,8 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     {
         OPM_THROW(std::runtime_error, "Could not initialize Zoltan!");
     }
-
+    
+    Zoltan_Set_Param(zz, "IMBALANCE_TOL", "1.05");
     Zoltan_Set_Param(zz, "DEBUG_LEVEL", "0");
     Zoltan_Set_Param(zz, "LB_METHOD", "GRAPH");
     Zoltan_Set_Param(zz, "LB_APPROACH", "PARTITION");
@@ -58,25 +59,28 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     Zoltan_Set_Param(zz, "NUM_LID_ENTRIES", "1");
     Zoltan_Set_Param(zz, "RETURN_LISTS", "ALL");
     Zoltan_Set_Param(zz, "CHECK_GRAPH", "2");
-    Zoltan_Set_Param(zz,"EDGE_WEIGHT_DIM","0");
+    Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM","0");
     Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "0");
-    Zoltan_Set_Param(zz, "PHG_EDGE_SIZE_THRESHOLD", ".35");  /* 0-remove all, 1-remove none */
-
+    Zoltan_Set_Param(zz, "PHG_EDGE_SIZE_THRESHOLD", ".35");  /* 0-remove all, 1-remove none */        
+    
     // For the load balancer one process has the whole grid and
     // all others an empty partition before loadbalancing.
     bool partitionIsEmpty     = cc.rank()!=root;
-    bool partitionIsWholeGrid = !partitionIsEmpty;
+    bool partitionIsWholeGrid = !partitionIsEmpty;    
 
     std::shared_ptr<CombinedGridWellGraph> grid_and_wells;
 
     if( wells )
     {
-        Zoltan_Set_Param(zz,"EDGE_WEIGHT_DIM","1");
+	if (useObjWgt)
+	    Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "1");
+	
+        Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM", "1");
         grid_and_wells.reset(new CombinedGridWellGraph(cpgrid,
                                                        wells,
                                                        transmissibilities,
                                                        partitionIsEmpty, 
-						       useTransWeights));
+						       weightsMethod));
         Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, *grid_and_wells,
                                                     partitionIsEmpty);
     }

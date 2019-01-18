@@ -598,7 +598,7 @@ namespace Dune
         bool loadBalance(int overlapLayers=1)
         {
             using std::get;
-            return get<0>(scatterGrid(nullptr, nullptr, overlapLayers, false));
+            return get<0>(scatterGrid(nullptr, nullptr, overlapLayers, 1, false));
         }
 
         // loadbalance is not part of the grid interface therefore we skip it.
@@ -618,7 +618,7 @@ namespace Dune
                     const double* transmissibilities = nullptr,
                     int overlapLayers=1)
         {
-            return scatterGrid(wells, transmissibilities, overlapLayers, true);
+            return scatterGrid(wells, transmissibilities, overlapLayers, 1, false);
         }
 
 	/// \brief Distributes this grid over the available nodes in a distributed machine
@@ -634,9 +634,9 @@ namespace Dune
         std::pair<bool, std::unordered_set<std::string> >
         loadBalance(const std::vector<const cpgrid::OpmWellType *> * wells,
                     const double* transmissibilities = nullptr,
-                    bool useTransWeights = true, int overlapLayers=1)
+                    int edgeWeightsMethod=1, bool useObjWgt=false, int overlapLayers=1)
         {
-            return scatterGrid(wells, transmissibilities, overlapLayers, useTransWeights);
+            return scatterGrid(wells, transmissibilities, overlapLayers, edgeWeightsMethod, useObjWgt);
         }
 
         /// \brief Distributes this grid and data over the available nodes in a distributed machine.
@@ -659,7 +659,7 @@ namespace Dune
                     const double* transmissibilities = nullptr,
                     int overlapLayers=1)
         {
-            auto ret = loadBalance(wells, transmissibilities, true, overlapLayers);
+            auto ret = loadBalance(wells, transmissibilities, 1, false, overlapLayers);
             scatterData(data);
             return ret;
         }
@@ -1298,7 +1298,7 @@ namespace Dune
         std::pair<bool, std::unordered_set<std::string> >
         scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
                     const double* transmissibilities,
-                    int overlapLayers, bool useTransWeight);
+                    int overlapLayers, int edgeWeightsMethod, bool useObjWgt);
 
         /** @brief The data stored in the grid.
          *
