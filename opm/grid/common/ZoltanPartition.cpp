@@ -50,7 +50,7 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     {
         OPM_THROW(std::runtime_error, "Could not initialize Zoltan!");
     }
-    
+
     Zoltan_Set_Param(zz, "IMBALANCE_TOL", "1.05");
     Zoltan_Set_Param(zz, "DEBUG_LEVEL", "0");
     Zoltan_Set_Param(zz, "LB_METHOD", "GRAPH");
@@ -61,8 +61,8 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     Zoltan_Set_Param(zz, "CHECK_GRAPH", "2");
     Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM","0");
     Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "0");
-    Zoltan_Set_Param(zz, "PHG_EDGE_SIZE_THRESHOLD", ".35");  /* 0-remove all, 1-remove none */        
-    
+    Zoltan_Set_Param(zz, "PHG_EDGE_SIZE_THRESHOLD", ".35");  /* 0-remove all, 1-remove none */
+
     // For the load balancer one process has the whole grid and
     // all others an empty partition before loadbalancing.
     bool partitionIsEmpty     = cc.rank()!=root;
@@ -80,7 +80,9 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
                                                        wells,
                                                        transmissibilities,
                                                        partitionIsEmpty, 
-						       weightsMethod));
+						       weightsMethod,
+						       useObjWgt));
+
         Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, *grid_and_wells,
                                                     partitionIsEmpty);
     }

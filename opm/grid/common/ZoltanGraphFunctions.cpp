@@ -80,7 +80,6 @@ void getCpGridWellsVertexList(void* graphPointer, int numGlobalIdEntries,
 			      ZOLTAN_ID_PTR lids, int wgtDim,
 			      float *objWgts, int *err)
 {
-    //(void) wgtDim; (void) objWgts;
     const CombinedGridWellGraph& graph =
         *static_cast<CombinedGridWellGraph*>(graphPointer);
     const Dune::CpGrid&  grid = graph.getGrid();
@@ -370,9 +369,9 @@ void getCpGridWellsEdgeList(void *graphPointer, int sizeGID, int sizeLID,
 CombinedGridWellGraph::CombinedGridWellGraph(const CpGrid& grid,
                                              const std::vector<const OpmWellType*> * wells,
                                              const double* transmissibilities,
-                                             bool pretendEmptyGrid, 
-					     int edgeWeightsMethod)
-    : grid_(grid), transmissibilities_(transmissibilities), edgeWeightsMethod_(edgeWeightsMethod)
+                                             bool pretendEmptyGrid, int edgeWeightsMethod,
+					     bool useObjWgt)
+    : grid_(grid), transmissibilities_(transmissibilities), edgeWeightsMethod_(edgeWeightsMethod) 
 {
     if ( pretendEmptyGrid )
     {
@@ -391,11 +390,14 @@ CombinedGridWellGraph::CombinedGridWellGraph(const CpGrid& grid,
     well_indices_.init(*wells, cpgdim, cartesian_to_compressed);
     std::vector<int>().swap(cartesian_to_compressed); // free memory.
     addCompletionSetToGraph();
+
+    //call function needed for logaritmic edge weights
     if (edgeWeightsMethod_ == 2)
 	findMaxMinTrans();
-    if (true)
-	calculateVertexWeights();
 
+    //call function needed for vertex weights
+    if (useObjWgt)
+	calculateVertexWeights();
 }
 
 void setCpGridZoltanGraphFunctions(Zoltan_Struct *zz, const Dune::CpGrid& grid,

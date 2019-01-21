@@ -132,7 +132,7 @@ public:
     CombinedGridWellGraph(const Dune::CpGrid& grid,
                           const std::vector<const OpmWellType*> * wells,
                           const double* transmissibilities,
-                          bool pretendEmptyGrid, int edgeWeightsMethod);
+                          bool pretendEmptyGrid, int edgeWeightsMethod, bool useObjWgt);
 
     /// \brief Access the grid.
     const Dune::CpGrid& getGrid() const
@@ -200,23 +200,20 @@ private:
     void findMaxMinTrans()
     {
 	double min_val = std::numeric_limits<float>::max();
-	double max_val = 0.0;
-	
+		
 	for (int face = 0; face < getGrid().numFaces(); ++face)
 	{
 	    double trans = transmissibilities_[face];
 	    if (trans > 0)
 	    {
 		if (trans < min_val)
-		    min_val = trans;
-		if (trans > max_val)
-		    max_val = trans;
+		    min_val = trans;		
 	    }
-	}
-	trans_max_ = max_val;
-	trans_min_ = min_val;
-	log_min_ = std::log(trans_min_);
+	}	
+	log_min_ = std::log(min_val);
     }
+    
+    
     void calculateVertexWeights()
     {
 	auto& globalIdSet = grid_.globalIdSet();
@@ -238,11 +235,9 @@ private:
     GraphType wellsGraph_;
     const double* transmissibilities_;
     WellConnections well_indices_;
-    int edgeWeightsMethod_;
     std::vector<int> vertexWeights_;
-    //bool useTransWeights_;
-    double trans_max_;
-    double trans_min_;
+
+    int edgeWeightsMethod_; 
     double log_min_;
 };
 
