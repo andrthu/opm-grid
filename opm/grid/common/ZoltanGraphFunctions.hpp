@@ -150,6 +150,11 @@ public:
 	return vertexWeights_;
     }
 
+    const std::vector<int>& getVertexWeightsWithWells() const
+    {
+	return vertexWeightsWithWells_;
+    }
+
     double transmissibility(int face_index) const
     {
 	return transmissibilities_ ? 1.0e18*transmissibilities_[face_index] : 1.0;
@@ -161,6 +166,12 @@ public:
 	return trans == 0.0 ? 1.0 : 1.0 + std::log(trans) - log_min_;
     }
 
+    double logTransmissibilityWeights2(int face_index) const
+    {
+	double trans = transmissibilities_[face_index]; 
+	return trans == 0.0 ? 0.1 : 1.0 + std::log(trans) - log_min_;
+    }
+
     double edgeWeight(int face_index) const
     {
 	if (edgeWeightsMethod_ == 0)
@@ -169,6 +180,8 @@ public:
 	    return transmissibility(face_index);
 	else if (edgeWeightsMethod_ == 2)
 	    return logTransmissibilityWeights(face_index);
+	else if (edgeWeightsMethod_ == 3)
+	    return logTransmissibilityWeights2(face_index);
 	else
 	    return 1.0;
     }
@@ -211,22 +224,20 @@ private:
 	    }
 	}	
 	log_min_ = std::log(min_val);
-    }
-    
-    
+    }    
+
     void calculateVertexWeights()
     {
 	auto& globalIdSet = grid_.globalIdSet();
 	vertexWeights_.resize(grid_.numCells(), 0);
-	
+
 	int idx = 0;
-	for (auto cell = grid_.leafbegin<0>(); cell != grid_.leafend<0>(); 
-	     ++cell)
+	for (auto cell = grid_.leafbegin<0>(); cell != grid_.leafend<0>();++cell)
 	{
 	    int cid = globalIdSet.id(*cell);
 	    vertexWeights_[idx] = grid_.numCellFaces(cid) + 1;
-	    vertexWeights_[idx] += wellsGraph_[cid].size();
-	    
+	    vertexWeightsWithWells_[idx] = vertexWeights_[idx] + wellsGraph_[cid].size();
+
 	    idx++;
 	}
     }
@@ -236,8 +247,9 @@ private:
     const double* transmissibilities_;
     WellConnections well_indices_;
     std::vector<int> vertexWeights_;
+    std::vector<int> vertexWeightsWithWells_;
 
-    int edgeWeightsMethod_; 
+    int edgeWeightsMethod_;
     double log_min_;
 };
 
