@@ -600,22 +600,25 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     cell_counter.indexset->beginResize();
     typedef std::vector<std::set<int> >::const_iterator OIterator;
     std::vector<int>::const_iterator ci=cell_part.begin();
+
+    // Interior cells nubered first
     for(OIterator end=overlap.end(), begin=overlap.begin(), i=begin; i!=end; ++i, ++ci)
     {
-        if(i->size())
-            // Cell is shared between different processors
-            cell_counter(i-begin, *i, *ci);
-        else
-            // cell is not shared
-            cell_counter(i-begin, *ci);
+	if(i->size())
+	    // Cell is shared between different processors
+	    cell_counter(i-begin, *i, *ci);
+	else
+	    // cell is not shared
+	    cell_counter(i-begin, *ci);	
     }
+
     cell_counter.indexset->endResize();
     // setup the remote indices.
     typedef RemoteIndexListModifier<RemoteIndices::ParallelIndexSet, RemoteIndices::Allocator,
                                     false> Modifier;
     typedef RemoteIndices::RemoteIndex RemoteIndex;
     cell_remote_indices_.setIndexSets(cell_indexset_, cell_indexset_, ccobj_);
-
+    //cell_remote_indices_.rebuild<true>();
 
     // Create a map of ListModifiers
     if(cell_counter.neighbors.size()){ //extra scope to call destructor of the Modifiers
