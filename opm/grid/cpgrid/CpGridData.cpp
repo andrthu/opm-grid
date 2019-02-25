@@ -602,13 +602,30 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     std::vector<int>::const_iterator ci=cell_part.begin();
     for(OIterator end=overlap.end(), begin=overlap.begin(), i=begin; i!=end; ++i, ++ci)
     {
-        if(i->size())
-            // Cell is shared between different processors
-            cell_counter(i-begin, *i, *ci);
-        else
-            // cell is not shared
-            cell_counter(i-begin, *ci);
+	if ( *ci == my_rank )
+	{
+	    if(i->size())
+		// Cell is shared between different processors
+		cell_counter(i-begin, *i, *ci);
+	    else
+		// cell is not shared
+		cell_counter(i-begin, *ci);
+	}
     }
+
+    for(OIterator end=overlap.end(), begin=overlap.begin(), i=begin; i!=end; ++i, ++ci)
+    {
+	if ( *ci != my_rank )
+	{
+	    if(i->size())
+		// Cell is shared between different processors
+		cell_counter(i-begin, *i, *ci);
+	    else
+		// cell is not shared
+		cell_counter(i-begin, *ci);
+	}
+    }
+
     cell_counter.indexset->endResize();
     // setup the remote indices.
     typedef RemoteIndexListModifier<RemoteIndices::ParallelIndexSet, RemoteIndices::Allocator,
