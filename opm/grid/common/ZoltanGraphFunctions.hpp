@@ -28,6 +28,7 @@
 
 #if defined(HAVE_ZOLTAN) && defined(HAVE_MPI)
 
+#include <algorithm>
 #include <mpi.h>
 
 // Zoltan redefines HAVE_MPI. Therefore we need to back it up, undef, and
@@ -168,8 +169,17 @@ public:
 
     double logTransmissibilityWeights2(int face_index) const
     {
-	double trans = transmissibilities_[face_index]; 
+	double trans = transmissibilities_[face_index];
 	return trans == 0.0 ? 0.1 : 1.0 + std::log(trans) - log_min_;
+    }
+
+    double catagoryTransWeights(int face_index) const
+    {
+	double trans = transmissibilities_[face_index];
+	if (trans == 0) {return 0.1;}
+	if (trans < trans_bound_[0]) {return 1;}
+	if (trans < trans_bound_[1]) {return 10:}
+	return 100;
     }
 
     double edgeWeight(int face_index) const
@@ -182,6 +192,8 @@ public:
 	    return logTransmissibilityWeights(face_index);
 	else if (edgeWeightsMethod_ == 3)
 	    return logTransmissibilityWeights2(face_index);
+	else if (edgeWeightsMethod_ == 4)
+	    return catagoryTransWeights(face_index);
 	else
 	    return 1.0;
     }
@@ -194,7 +206,7 @@ private:
 
     void addCompletionSetToGraph()
     {
-        for(const auto& well_indices: well_indices_)
+        for(const auto& well_indices : well_indices_)
         {
             for( auto well_idx = well_indices.begin(); well_idx != well_indices.end();
                  ++well_idx)
@@ -224,7 +236,7 @@ private:
 	    }
 	}	
 	log_min_ = std::log(min_val);
-    }    
+    }
 
     void calculateVertexWeights()
     {
@@ -242,12 +254,24 @@ private:
 	}
     }
 
+    void sortTrans()
+    {
+	int numFace = grid_.numFaces();
+	std::vector<double> trans_sort(transmissibilities_, transmissibilities_ + numFace);
+
+	std::sort(trans_sort.begin(), trans_sort.end());
+
+	trans_bound_.push_back(trans_sort[numFace/4]);
+	trans_bound_.push_back(trans_sort[3*(numFace/4)]);
+    }
+
     const Dune::CpGrid& grid_;
     GraphType wellsGraph_;
     const double* transmissibilities_;
     WellConnections well_indices_;
     std::vector<int> vertexWeights_;
     std::vector<int> vertexWeightsWithWells_;
+    std::vector<double> trans_bound_;
 
     int edgeWeightsMethod_;
     double log_min_;
