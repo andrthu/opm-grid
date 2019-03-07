@@ -68,7 +68,7 @@ namespace Dune
 
 std::pair<bool, std::unordered_set<std::string> >
 CpGrid::scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
-                    const double* transmissibilities, int overlapLayers, int edgeWeightsMethod, bool useObjWgt)
+                    const double* transmissibilities, int overlapLayers, int edgeWeightsMethod, int reorderLocal, bool useObjWgt)
 {
     // Silence any unused argument warnings that could occur with various configurations.
     static_cast<void>(wells);
@@ -86,6 +86,7 @@ CpGrid::scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
 
     int my_num=cc.rank();
 #ifdef HAVE_ZOLTAN
+
     auto part_and_wells =
         cpgrid::zoltanGraphPartitionGridOnRoot(*this, wells, transmissibilities, cc, edgeWeightsMethod, useObjWgt, 0);
     int num_parts = cc.size();
@@ -148,7 +149,7 @@ CpGrid::scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
     {
         distributed_data_.reset(new cpgrid::CpGridData(new_comm));
         distributed_data_->distributeGlobalGrid(*this,*this->current_view_data_, cell_part,
-                                                overlapLayers);
+                                                overlapLayers, reorderLocal);
         std::cout << "After loadbalancing process " << my_num << " has " <<
             distributed_data_->cell_to_face_.size() << " cells." << std::endl;
 

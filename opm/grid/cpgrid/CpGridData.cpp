@@ -518,7 +518,7 @@ void createInterfaces(std::vector<std::map<int,char> >& attributes,
 void CpGridData::distributeGlobalGrid(const CpGrid& grid,
                                       const CpGridData& view_data,
                                       const std::vector<int>& cell_part,
-                                      int overlap_layers)
+                                      int overlap_layers, int ghostLast)
 {
 #if HAVE_MPI
     Dune::CollectiveCommunication<Dune::MPIHelper::MPICommunicator>& ccobj=ccobj_;
@@ -533,6 +533,7 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     // vector with the set of ranks that
     std::vector<std::set<int> > overlap;
 
+    bool reorder = ghostLast==1;
     overlap.resize(cell_part.size());
     addOverlapLayer(grid, cell_part, overlap, my_rank, false, overlap_layers);
     // count number of cells
@@ -596,37 +597,49 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     cell_counter.count=0;
     cell_counter.global2local.reserve(cell_part.size());
     cell_counter.indexset=&cell_indexset_;
+
+    int interior = 0;
+    int ghost = 0;
     // set up the index set.
     cell_counter.indexset->beginResize();
     typedef std::vector<std::set<int> >::const_iterator OIterator;
     std::vector<int>::const_iterator ci=cell_part.begin();
     for(OIterator end=overlap.end(), begin=overlap.begin(), i=begin; i!=end; ++i, ++ci)
     {
-	if ( *ci == my_rank )
+	if ( *ci == my_rank || !reorder)
 	{
-	    if(i->size())
+	    interior++;
+	    if(i->size()) {
 		// Cell is shared between different processors
 		cell_counter(i-begin, *i, *ci);
+	    }
 	    else
 		// cell is not shared
 		cell_counter(i-begin, *ci);
 	}
     }
-
-    for(OIterator end=overlap.end(), begin=overlap.begin(), i=begin; i!=end; ++i, ++ci)
-    {
-	if ( *ci != my_rank )
+    if (reorder) {
+	ci=cell_part.begin();
+	if (my_rank===)
+	    std::cout << "Reorder local index" << std::endl;
+	for(OIterator end=overlap.end(), begin=overlap.begin(), i=begin; i!=end; ++i, ++ci)
 	{
-	    if(i->size())
-		// Cell is shared between different processors
-		cell_counter(i-begin, *i, *ci);
-	    else
-		// cell is not shared
-		cell_counter(i-begin, *ci);
+	    if ( *ci != my_rank )
+	    {
+		if(i->size()) {
+		    // Cell is shared between different processors
+		    cell_counter(i-begin, *i, *ci);
+		    ghost++;
+		}
+		else
+		    // cell is not shared
+		    cell_counter(i-begin, *ci);
+	    }
 	}
     }
 
     cell_counter.indexset->endResize();
+    //std::cout << cell_counter.count <<" "<<interior<<" "<< ghost << std::endl;
     // setup the remote indices.
     typedef RemoteIndexListModifier<RemoteIndices::ParallelIndexSet, RemoteIndices::Allocator,
                                     false> Modifier;
@@ -713,6 +726,8 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     // renumber  face and point indicators
     std::for_each(face_indicator.begin(), face_indicator.end(), AssignAndIncrement());
     std::for_each(point_indicator.begin(), point_indicator.end(), AssignAndIncrement());
+
+    
 
     std::vector<int> map2GlobalFaceId;
     int noExistingFaces = setupAndCountGlobalIds<1>(face_indicator, map2GlobalFaceId,
@@ -812,18 +827,41 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     for(auto i=cell_indexset_.begin(), end=cell_indexset_.end();
         i!=end; ++i)
     {
-        typedef boost::iterator_range<const EntityRep<1>*>::const_iterator RowIter;
-        const Opm::SparseTable<EntityRep<1> >& c2f=view_data.cell_to_face_;
-        auto row=c2f[i->global()];
-        // create the new row, i.e. copy orientation and use new face indicator.
-        std::vector<EntityRep<1> > new_row(row.size());
-        std::vector<EntityRep<1> >::iterator  nface=new_row.begin();
-        for(RowIter face=row.begin(), fend=row.end(); face!=fend; ++face, ++nface)
-            nface->setValue(face_indicator[face->index()], face->orientation());
-        // Append the new row to the matrix
-        cell_to_face_.appendRow(new_row.begin(), new_row.end());
-        for(int j=0; j<8; ++j)
-            cell_to_point_[i->local()][j]=point_indicator[view_data.cell_to_point_[i->global()][j]];
+	if (i->local().attribute()==AttributeSet::owner || !reorder) {
+	    typedef boost::iterator_range<const EntityRep<1>*>::const_iterator RowIter;
+	    const Opm::SparseTable<EntityRep<1> >& c2f=view_data.cell_to_face_;
+	    auto row=c2f[i->global()];
+	    // create the new row, i.e. copy orientation and use new face indicator.
+	    std::vector<EntityRep<1> > new_row(row.size());
+	    std::vector<EntityRep<1> >::iterator  nface=new_row.begin();
+	    for(RowIter face=row.begin(), fend=row.end(); face!=fend; ++face, ++nface)
+		nface->setValue(face_indicator[face->index()], face->orientation());
+	    // Append the new row to the matrix
+	    cell_to_face_.appendRow(new_row.begin(), new_row.end());
+	    for(int j=0; j<8; ++j)
+		cell_to_point_[i->local()][j]=point_indicator[view_data.cell_to_point_[i->global()][j]];
+	}
+    }
+
+    if (reorder) {
+	for(auto i=cell_indexset_.begin(), end=cell_indexset_.end();
+	    i!=end; ++i)
+	    {
+		if (i->local().attribute()!=AttributeSet::owner) {
+		    typedef boost::iterator_range<const EntityRep<1>*>::const_iterator RowIter;
+		    const Opm::SparseTable<EntityRep<1> >& c2f=view_data.cell_to_face_;
+		    auto row=c2f[i->global()];
+		    // create the new row, i.e. copy orientation and use new face indicator.
+		    std::vector<EntityRep<1> > new_row(row.size());
+		    std::vector<EntityRep<1> >::iterator  nface=new_row.begin();
+		    for(RowIter face=row.begin(), fend=row.end(); face!=fend; ++face, ++nface)
+			nface->setValue(face_indicator[face->index()], face->orientation());
+		    // Append the new row to the matrix
+		    cell_to_face_.appendRow(new_row.begin(), new_row.end());
+		    for(int j=0; j<8; ++j)
+			cell_to_point_[i->local()][j]=point_indicator[view_data.cell_to_point_[i->global()][j]];
+		}
+	    }
     }
 
     // Calculate the number of nonzeros needed for the face_to_cell sparse matrix
@@ -839,8 +877,15 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     //- face_to cell_ : extract rows that connect to an existent cell
     std::vector<int> cell_indicator(view_data.cell_to_face_.size(),
                                     std::numeric_limits<int>::max());
-    for(auto i=cell_indexset_.begin(), end=cell_indexset_.end(); i!=end; ++i)
-        cell_indicator[i->global()]=i->local();
+    int teller = 0;
+    for(auto i=cell_indexset_.begin(), end=cell_indexset_.end(); i!=end; ++i) {
+        cell_indicator[i->global()] = i->local().local();
+	/*
+	  if (my_rank==0)
+	    std::cout << "cellIndicator check: "<< i->global() << " " << i->local().local() << " " << teller << std::endl;
+	teller++;
+	*/
+    }
 
     for(auto begin=face_indicator.begin(), f=begin, fend=face_indicator.end(); f!=fend; ++f)
     {
