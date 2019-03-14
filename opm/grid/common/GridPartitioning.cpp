@@ -304,27 +304,181 @@ void addOverlapLayer(const CpGrid& grid, int index, const CpGrid::Codim<0>::Enti
         }
     }
 
-    void addOverlapLayer(const CpGrid& grid, const std::vector<int>& cell_part,
+void addOverlapLayer(const CpGrid& grid, const std::vector<int>& cell_part,
                          std::vector<std::set<int> >& cell_overlap, int mypart,
                          int layers, bool all)
-    {
-        cell_overlap.resize(cell_part.size());
-        const CpGrid::LeafIndexSet& ix = grid.leafIndexSet();
-        for (CpGrid::Codim<0>::LeafIterator it = grid.leafbegin<0>();
-             it != grid.leafend<0>(); ++it) {
-            int index = ix.index(*it);
-            int owner = -1;
-            if(cell_part[index]==mypart)
-                owner = mypart;
-            else
-            {
-                if(all)
-                    owner=cell_part[index];
-                else
-                    continue;
-            }
-            addOverlapLayer(grid, index, *it, owner, cell_part, cell_overlap, layers-1);
-        }
+{
+    cell_overlap.resize(cell_part.size());
+    const CpGrid::LeafIndexSet& ix = grid.leafIndexSet();
+    for (CpGrid::Codim<0>::LeafIterator it = grid.leafbegin<0>();
+	 it != grid.leafend<0>(); ++it) {
+	int index = ix.index(*it);
+	int owner = -1;
+	if(cell_part[index]==mypart)
+	    owner = mypart;
+	else
+        {
+	    if(all)
+		owner=cell_part[index];
+	    else
+		continue;
+	}
+	addOverlapLayer(grid, index, *it, owner, cell_part, cell_overlap, layers-1);
+    }
+}
+
+void findInteriorAndOverlapCells(std::vector<std::set<int>>& overlap, const std::vector<int>& cell_part, int my_rank,
+				 std::vector<int>& naturalOrder, std::vector<int>& partitionType)
+{
+    auto ci = cell_part.begin();
+    auto begin = overlap.begin();
+    partitionType.resize(cell_part.size(), 0);
+
+    for (auto i = begin; i!=overlap.end(); ++i, ++ci) {
+	if (i->size()) {
+	    if (*ci == my_rank) {
+		naturalOrder.push_back(i-begin);
+		partitionType[i-begin] = 2;
+	    }
+	    else {
+		auto isO = i->find(my_rank);
+		if (isO != i->end()) {
+		    naturalOrder.push_back(i-begin);
+		    partitionType[i-begin] = 1;
+		}
+	    }
+	}
+	else {
+	    if (*ci == my_rank) {
+		naturalOrder.push_back(i-begin);
+		partitionType[i-begin] = 2;
+	    }
+	}
+    }
+}
+int interiorCMK(const CpGrid& grid, const std::vector<int>& naturalOrder, const std::vector<int>& pType,
+		 std::vector<int>& l2g) 
+{
+    l2g.resize(naturalOrder.size(), 0);
+
+    std::vector<bool> visited(pType.size(), false);
+    
+    int local = 0;
+    for (unsigned i = 0; i< naturalOrder.size(); ++i) {
+	
+	int global = naturalOrder[i];
+
+	if (pType[global] == 2)
+	{
+	    int start = global;
+	    
+	    if (!visited[start]) {
+
+		std::list<int> queue;
+		
+		queue.push_back(start);
+		visited[start] = true;
+		
+		while (!queue.empty()) {
+		    
+		    int cell_idx = queue.front();
+		    queue.pop_front();
+		    
+		    l2g[local] = cell_idx;
+		    local++;
+
+		    for (int localFace = 0; localFace<grid.numCellFaces(cell_idx); ++localFace) {
+			int face = grid.cellFace(cell_idx, localFace);
+			const int faceCell0 = grid.faceCell(face, 0);
+			const int faceCell1 = grid.faceCell(face, 1);
+			int nab = faceCell0 == cell_idx ? faceCell1 : faceCell0;
+
+			if (nab != -1) {
+			    if (pType[nab] == 2) {
+				if (!visited[nab]) {
+				    queue.push_back(nab);
+				    visited[nab] = true;
+				}
+			    }
+			}
+		    }
+		}
+	    }
+	}
+    }
+    return local;
+}
+
+void reorderLocalCMK(const CpGrid& grid, const std::vector<int>& cells, const std::vector<int>& pType,
+		 std::vector<int>& l2g) 
+{
+    int lid = interiorCMK(grid, cells, pType, l2g);
+    
+    for (unsigned i = 0; i < cells.size(); ++i) {
+	int gid = cells[i];
+	if (pType[gid] == 1) {
+	    l2g[lid] = gid;
+	    lid++;
+	}
+    }
+}
+
+void reorderLocalRCM(const CpGrid& grid, const std::vector<int>& cells, const std::vector<int>& pType,
+		 std::vector<int>& l2g) 
+{
+    std::vector<int> tmp;
+    int lid = interiorCMK(grid, cells, pType, tmp);
+    
+    l2g.resize(cells.size(), 0);
+    for (int j = 0; j < lid; ++j) 
+    {	
+	l2g[j] = tmp[lid - j - 1];
+    }
+
+    for (unsigned i = 0; i < cells.size(); ++i) {
+	int gid = cells[i];
+	if (pType[gid] == 1) {
+	    l2g[lid] = gid;
+	    lid++;
+	}
+    }
+}
+
+std::vector<int> reorderLocalCells(const CpGrid& grid, const std::vector<int>& naturalOrder, const std::vector<int>& pType,
+				   int reorderMethod)
+{
+    if (reorderMethod == 0)
+	return naturalOrder;
+    else if (reorderMethod == 1) {
+	int partSize = naturalOrder.size();
+	std::vector<int> l2g(partSize, 0);
+	int lid = 0;
+	for (int i = 0; i < partSize; ++i) {
+	    int gid = naturalOrder[i];
+	    if (pType[gid] == 2) {
+		l2g[lid] = gid;
+		lid++;
+	    }
+	}
+	for (int i = 0; i < partSize; ++i) {
+	    int gid = naturalOrder[i];
+	    if (pType[gid] == 1) {
+		l2g[lid] = gid;
+		lid++;
+	    }
+	}
+	return l2g;
+    }
+    else if (reorderMethod == 2) {
+	std::vector<int> l2g;
+	reorderLocalCMK(grid, naturalOrder, pType, l2g);
+	return l2g;
+    }
+    else if (reorderMethod == 3) {
+	std::vector<int> l2g;
+	reorderLocalRCM(grid, naturalOrder, pType, l2g);
+	return l2g;
+    }
 }
 } // namespace Dune
 
