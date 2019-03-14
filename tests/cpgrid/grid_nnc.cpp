@@ -76,17 +76,18 @@ struct Fixture
         int intercount = 0;
         int bdycount = 0;
         std::vector<std::pair<int, int>> nb;
-        for (auto elem = grid.leafbegin<0>(); elem != grid.leafend<0>();++elem) {
+	      for (auto elem = grid.leafbegin<0>(); elem != grid.leafend<0>();++elem) {
             ++elemcount;
-	    auto isend = gv.iend(elem);
-            for (auto is = gv.ibegin(elem); is!=isend; ++is) {
+	          auto isend = gv.iend(elem);
+	          for (auto is = gv.ibegin(elem); is!=isend; ++is) {
                 ++intercount;
-                if (is->boundary()) {
+
+		            if (is->boundary()) {
                     ++bdycount;
                 } else {
                     // Internal connection, store in vector of pairs, if c1 < c2.
-                    const int c1 = elmap.index(*elem);
-                    const int c2 = elmap.index(is->outside());
+		                const int c1 = elmap.index(*elem);
+		                const int c2 = elmap.index(is->outside());
                     if (c1 < c2) {
                         nb.push_back(std::make_pair(c1, c2));
                     }

@@ -392,8 +392,12 @@ CombinedGridWellGraph::CombinedGridWellGraph(const CpGrid& grid,
     addCompletionSetToGraph();
 
     //call function needed for logaritmic edge weights
-    if (edgeWeightsMethod_ > 1)
+    if (edgeWeightsMethod_ == 2 || edgeWeightsMethod_ == 3)
 	findMaxMinTrans();
+
+    //call function required for category weights.
+    if (edgeWeightsMethod_ == 4)
+	sortTrans();
 
     //call function needed for vertex weights
     if (useObjWgt)
