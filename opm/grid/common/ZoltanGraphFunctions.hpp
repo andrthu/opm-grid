@@ -178,7 +178,7 @@ public:
 	double trans = transmissibilities_[face_index];
 	if (trans == 0) {return 0.1;}
 	if (trans < trans_bound_[0]) {return 1;}
-	if (trans < trans_bound_[1]) {return 10:}
+	if (trans < trans_bound_[1]) {return 10;}
 	return 100;
     }
 
@@ -263,6 +263,12 @@ private:
 
 	trans_bound_.push_back(trans_sort[numFace/4]);
 	trans_bound_.push_back(trans_sort[3*(numFace/4)]);
+	if (grid_.comm().rank() == 0) {
+	    std::cout << "Bounds for trans weights: "; 
+	    for (unsigned i = 0; i < trans_bound_.size(); ++i)
+		std::cout << trans_bound_[i] << " ";
+	    std::cout << std::endl;
+	}
     }
 
     const Dune::CpGrid& grid_;
