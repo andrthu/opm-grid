@@ -182,7 +182,15 @@ public:
 	return 100;
     }
 
-    double edgeWeight(int face_index) const
+    double normalizedTransWeights(int face, int cell0, int cell1) const
+    {
+	double trans = transmissibilities_[face];
+	double d0 = diag_normalized_[cell0];
+	double d1 = diag_normalized_[cell1];
+	return trans/std::sqrt(d0*d1);
+    }
+
+    double edgeWeight(int face_index, int cell1, int cell2) const
     {
 	if (edgeWeightsMethod_ == 0)
 	    return 1.0;
@@ -194,6 +202,8 @@ public:
 	    return logTransmissibilityWeights2(face_index);
 	else if (edgeWeightsMethod_ == 4)
 	    return catagoryTransWeights(face_index);
+	else if (edgeWeightsMethod_ == 4)
+	    return normalizedTransWeights(face_index, cell1, cell2);
 	else
 	    return 1.0;
     }
@@ -220,6 +230,26 @@ private:
                 }
             }
         }
+    }
+    void findDiagNormalized()
+    {
+	int N = grid_.numCells();
+	diag_normalized_.resize(N, 0.0);
+	for (int cell = 0; cell < N; ++cell)
+	{
+	    double diag_val;
+	    for ( int local_face = 0; local_face < grid_.numCellFaces(cell); ++local_face )
+	    {
+		const int face  = grid_.cellFace(cell, local_face);
+		const int face0 = grid_.faceCell(face, 0);
+		const int face1 = grid_.faceCell(face, 1);
+		if ( face0 != -1 && face1 != -1 )
+		{
+		    diag_val += transmissibilities_[face];
+		}
+	    }
+	    diag_normalized_[cell] = diag_val;
+	}
     }
 
     void findMaxMinTrans()
@@ -278,6 +308,7 @@ private:
     std::vector<int> vertexWeights_;
     std::vector<int> vertexWeightsWithWells_;
     std::vector<double> trans_bound_;
+    std::vector<double> diag_normalized_;
 
     int edgeWeightsMethod_;
     double log_min_;

@@ -326,7 +326,7 @@ void getCpGridWellsEdgeList(void *graphPointer, int sizeGID, int sizeLID,
                     if ( wellEdges.find(otherCell) == wellEdges.end() )
                     {
                         nborGID[idx] = globalID[otherCell];
-                        ewgts[idx++] = graph.edgeWeight(face);
+                        ewgts[idx++] = graph.edgeWeight(face, currentCell, otherCell);
                     }
                     continue;
                 }
@@ -334,7 +334,7 @@ void getCpGridWellsEdgeList(void *graphPointer, int sizeGID, int sizeLID,
             if ( wellEdges.find(otherCell) == wellEdges.end() )
             {
                 nborGID[idx] = globalID[otherCell];
-                ewgts[idx++] = graph.edgeWeight(face);
+                ewgts[idx++] = graph.edgeWeight(face, currentCell, otherCell);
             }
         }
 #ifndef NDEBUG
@@ -398,6 +398,9 @@ CombinedGridWellGraph::CombinedGridWellGraph(const CpGrid& grid,
     //call function required for category weights.
     if (edgeWeightsMethod_ == 4)
 	sortTrans();
+    //call function required for nrmalised trans weights.
+    if (edgeWeightsMethod_ == 5)
+	findDiagNormalized();
 
     //call function needed for vertex weights
     if (useObjWgt)
