@@ -25,6 +25,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <dune/common/version.hh>
 #include <dune/grid/common/mcmgmapper.hh>
 #include <opm/parser/eclipse/Parser/Parser.hpp>
 #include <opm/parser/eclipse/EclipseState/EclipseState.hpp>
@@ -76,13 +77,27 @@ struct Fixture
         int intercount = 0;
         int bdycount = 0;
         std::vector<std::pair<int, int>> nb;
-	      for (auto elem = grid.leafbegin<0>(); elem != grid.leafend<0>();++elem) {
+
+#if DUNE_VERSION_NEWER(DUNE_GRID, 2, 5)
+        for (const auto& elem : elements(gv)) {
+#else
+        auto elemIt = gv.template begin<0>();
+        auto elemEnd = gv.template end<0>();
+        for (; elemIt != elemEnd; ++elemIt ) {
+            auto& elem = *elemIt;
+#endif
             ++elemcount;
-	          auto isend = gv.iend(elem);
-	          for (auto is = gv.ibegin(elem); is!=isend; ++is) {
+#if DUNE_VERSION_NEWER(DUNE_GRID, 2, 5)
+            for (const auto& inter : intersections(gv, elem)) {
+#else
+            auto interIt = gv.ibegin(elem);
+            auto interEnd = gv.iend(elem);
+            for (; interIt != interEnd; ++interIt) {
+                auto& inter = *interIt;
+#endif
                 ++intercount;
 
-		            if (is->boundary()) {
+                if (is->boundary()) {
                     ++bdycount;
                 } else {
                     // Internal connection, store in vector of pairs, if c1 < c2.
