@@ -599,16 +599,16 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     cell_counter.indexset->beginResize();
 
     for (unsigned lid = 0; lid < l2g.size(); ++lid) {
-	      int gid = l2g[lid];
-	      auto nabHelp = overlap[gid];
-	      bool owner = pType[gid] == 2;
-	      if(nabHelp.size()) {
-	          // Cell is shared between different processors
-	          cell_counter(gid, nabHelp, owner);
-	      }
-	      else
-	          // cell is not shared
-	          cell_counter(gid, owner);
+	int gid = l2g[lid];
+	auto nabHelp = overlap[gid];
+	bool owner = pType[gid] == 2;
+	if(nabHelp.size()) {
+	    // Cell is shared between different processors
+	    cell_counter(gid, nabHelp, owner);
+	}
+	else
+	    // cell is not shared
+	    cell_counter(gid, owner);
     }
 
     cell_counter.indexset->endResize();
