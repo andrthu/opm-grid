@@ -148,7 +148,7 @@ public:
     
     const std::vector<int>& getVertexWeights() const
     {
-	return vertexWeights_;
+	return vertexWeightsWithWells_;
     }
 
     const std::vector<int>& getVertexWeightsWithWells() const
@@ -202,7 +202,7 @@ public:
 	    return logTransmissibilityWeights2(face_index);
 	else if (edgeWeightsMethod_ == 4)
 	    return catagoryTransWeights(face_index);
-	else if (edgeWeightsMethod_ == 4)
+	else if (edgeWeightsMethod_ == 5)
 	    return normalizedTransWeights(face_index, cell1, cell2);
 	else
 	    return 1.0;
@@ -272,6 +272,7 @@ private:
     {
 	auto& globalIdSet = grid_.globalIdSet();
 	vertexWeights_.resize(grid_.numCells(), 0);
+	vertexWeightsWithWells_.resize(grid_.numCells(), 0);
 
 	int idx = 0;
 	for (auto cell = grid_.leafbegin<0>(); cell != grid_.leafend<0>();++cell)

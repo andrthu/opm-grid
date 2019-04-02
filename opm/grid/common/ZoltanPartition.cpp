@@ -72,8 +72,10 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
 
     if( wells )
     {
-	if (useObjWgt)
+	if (useObjWgt) {
+	    if (!partitionIsEmpty) {std::cout<<"Using vertex weights"<<std::endl;}
 	    Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "1");
+	}
 	
         Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM", "1");
         grid_and_wells.reset(new CombinedGridWellGraph(cpgrid,

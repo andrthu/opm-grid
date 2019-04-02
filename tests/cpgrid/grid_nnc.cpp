@@ -97,12 +97,12 @@ struct Fixture
 #endif
                 ++intercount;
 
-                if (is->boundary()) {
+                if (inter.boundary()) {
                     ++bdycount;
                 } else {
                     // Internal connection, store in vector of pairs, if c1 < c2.
-		                const int c1 = elmap.index(*elem);
-		                const int c2 = elmap.index(is->outside());
+		                const int c1 = elmap.index(elem);
+		                const int c2 = elmap.index(inter.outside());
                     if (c1 < c2) {
                         nb.push_back(std::make_pair(c1, c2));
                     }
