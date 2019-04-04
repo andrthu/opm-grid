@@ -305,8 +305,8 @@ void addOverlapLayer(const CpGrid& grid, int index, const CpGrid::Codim<0>::Enti
     }
 
 void addOverlapLayer(const CpGrid& grid, const std::vector<int>& cell_part,
-                         std::vector<std::set<int> >& cell_overlap, int mypart,
-                         int layers, bool all)
+		     std::vector<std::set<int> >& cell_overlap, int mypart,
+		     int layers, bool all)
 {
     cell_overlap.resize(cell_part.size());
     const CpGrid::LeafIndexSet& ix = grid.leafIndexSet();
@@ -324,6 +324,60 @@ void addOverlapLayer(const CpGrid& grid, const std::vector<int>& cell_part,
 		continue;
 	}
 	addOverlapLayer(grid, index, *it, owner, cell_part, cell_overlap, layers-1);
+    }
+}
+
+void addOverlapLayerNoTrans(const CpGrid& grid, int cell, const int owner, 
+			    const std::vector<int>& cell_part,
+			    std::vector<std::set<int> >& cell_overlap, int recursion_deps,
+			    const double* trans)
+{
+    const CpGrid::LeafIndexSet& ix = grid.leafIndexSet();
+    //for (CpGrid::LeafIntersectionIterator iit = e.ileafbegin(); iit != e.ileafend(); ++iit) {
+    //int index = ix.index(e);
+    for (int loc_face = 0; loc_face < grid.numCellFaces(cell); ++loc_face) {
+	int face = grid.cellFace(cell, loc_face);
+	int faceCell0 = grid.faceCell(face, 0);
+	int faceCell1 = grid.faceCell(face, 1);
+	int otherCell = faceCell0!=cell ? faceCell0 : faceCell1;
+
+	if ( otherCell != 0 ) {
+	    if ( trans[face] != 0.0 ) {
+		int nbr = otherCell;
+		if ( cell_part[nbr] != owner )
+		{
+		    cell_overlap[nbr].insert(owner);
+		    cell_overlap[cell].insert(cell_part[nbr]);
+		    if ( recursion_deps>0 )
+		    {
+			// Add another layer
+			addOverlapLayerNoTrans(grid, nbr, owner, cell_part, cell_overlap, 
+					       recursion_deps-1, trans);
+		    }
+		}
+	    }
+	}
+    }
+}
+
+
+void addOverlapLayerNoTrans(const CpGrid& grid, const std::vector<int>& cell_part,
+			    std::vector<std::set<int> >& cell_overlap, int mypart,
+			    int layers, bool all, const double* trans)
+{
+    cell_overlap.resize(cell_part.size());
+    for (int cell = 0; cell < grid.numCells(); ++cell) {
+	int owner = -1;
+	if(cell_part[cell]==mypart)
+	    owner = mypart;
+	else
+        {
+	    if(all)
+		owner=cell_part[cell];
+	    else
+		continue;
+	}
+	addOverlapLayerNoTrans(grid, cell, owner, cell_part, cell_overlap, layers-1, trans);
     }
 }
 
@@ -447,9 +501,9 @@ void reorderLocalRCM(const CpGrid& grid, const std::vector<int>& cells, const st
 std::vector<int> reorderLocalCells(const CpGrid& grid, const std::vector<int>& naturalOrder, const std::vector<int>& pType,
 				   int reorderMethod)
 {
-    if (reorderMethod == 0)
+    if (reorderMethod == 0 || reorderMethod == 4)
 	return naturalOrder;
-    else if (reorderMethod == 1) {
+    else if (reorderMethod == 1 || reorderMethod == 5) {
 	int partSize = naturalOrder.size();
 	std::vector<int> l2g(partSize, 0);
 	int lid = 0;
@@ -480,5 +534,20 @@ std::vector<int> reorderLocalCells(const CpGrid& grid, const std::vector<int>& n
 	return l2g;
     }
 }
+/*
+int getFaceIdFromCell(const CpGrid& grid, int cell1, int cell2)
+{
+    for (int loc_face = 0; loc_face < grid.numCellFaces(cell1); ++loc_face) {
+	int face = grid_.cellFace(cell, local_face);
+	int faceCell0 = grid_.faceCell(face, 0);
+	int faceCell1 = grid_.faceCell(face, 1);
+	int otherCell = cell1 == faceCell0 ? faceCell1 : faceCell0;
+	if (otherCell == cell2)
+	    return face;
+
+    }
+    return 0;
+}
+*/
 } // namespace Dune
 

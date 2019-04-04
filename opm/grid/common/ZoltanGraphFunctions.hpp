@@ -133,7 +133,8 @@ public:
     CombinedGridWellGraph(const Dune::CpGrid& grid,
                           const std::vector<const OpmWellType*> * wells,
                           const double* transmissibilities,
-                          bool pretendEmptyGrid, int edgeWeightsMethod, bool useObjWgt);
+                          bool pretendEmptyGrid, int edgeWeightsMethod, 
+			  bool useObjWgt, std::vector<double> catW);
 
     /// \brief Access the grid.
     const Dune::CpGrid& getGrid() const
@@ -177,9 +178,9 @@ public:
     {
 	double trans = transmissibilities_[face_index];
 	if (trans == 0) {return 0.1;}
-	if (trans < trans_bound_[0]) {return 1;}
-	if (trans < trans_bound_[1]) {return 10;}
-	return 100;
+	if (trans < trans_bound_[0]) {return catW_[0];}
+	if (trans < trans_bound_[1]) {return catW_[1];}
+	return catW_[2];
     }
 
     double normalizedTransWeights(int face, int cell0, int cell1) const
@@ -310,6 +311,7 @@ private:
     std::vector<int> vertexWeightsWithWells_;
     std::vector<double> trans_bound_;
     std::vector<double> diag_normalized_;
+    std::vector<double> catW_;
 
     int edgeWeightsMethod_;
     double log_min_;

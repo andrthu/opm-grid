@@ -598,8 +598,9 @@ namespace Dune
         /// \warning May only be called once.
         bool loadBalance(int overlapLayers=1)
         {
+	    std::vector<double> nullW = {0,0,0};
             using std::get;
-            return get<0>(scatterGrid(nullptr, nullptr, overlapLayers, 1, 0, false));
+            return get<0>(scatterGrid(nullptr, nullptr, overlapLayers, 1, 0, false, nullW));
         }
 
         // loadbalance is not part of the grid interface therefore we skip it.
@@ -619,7 +620,8 @@ namespace Dune
                     const double* transmissibilities = nullptr,
                     int overlapLayers=1)
         {
-            return scatterGrid(wells, transmissibilities, overlapLayers, 1, 0, false);
+	    std::vector<double> nullW = {0,0,0};
+            return scatterGrid(wells, transmissibilities, overlapLayers, 1, 0, false, nullW);
         }
 
 	/// \brief Distributes this grid over the available nodes in a distributed machine
@@ -635,9 +637,9 @@ namespace Dune
         std::pair<bool, std::unordered_set<std::string> >
         loadBalance(const std::vector<const cpgrid::OpmWellType *> * wells,
                     const double* transmissibilities = nullptr,
-                    int edgeWeightsMethod=1, bool useObjWgt=false, int reorderLocal=0, int overlapLayers=1)
+                    int edgeWeightsMethod=1, bool useObjWgt=false, int reorderLocal=0, std::vector<double> catW={0,0,0}, int overlapLayers=1)
         {
-            return scatterGrid(wells, transmissibilities, overlapLayers, edgeWeightsMethod, reorderLocal, useObjWgt);
+            return scatterGrid(wells, transmissibilities, overlapLayers, edgeWeightsMethod, reorderLocal, useObjWgt, catW);
         }
 
         /// \brief Distributes this grid and data over the available nodes in a distributed machine.
@@ -660,7 +662,8 @@ namespace Dune
                     const double* transmissibilities = nullptr,
                     int overlapLayers=1)
         {
-            auto ret = loadBalance(wells, transmissibilities, 1, false, 0, overlapLayers);
+	    std::vector<double> nullW = {0,0,0};
+            auto ret = loadBalance(wells, transmissibilities, 1, false, 0, nullW, overlapLayers);
             scatterData(data);
             return ret;
         }
@@ -1304,7 +1307,8 @@ namespace Dune
         std::pair<bool, std::unordered_set<std::string> >
         scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
                     const double* transmissibilities,
-                    int overlapLayers, int edgeWeightsMethod, int reorderLocal, bool useObjWgt);
+                    int overlapLayers, int edgeWeightsMethod, int reorderLocal, bool useObjWgt,
+		    std::vector<double> catW);
 
         /** @brief The data stored in the grid.
          *

@@ -518,7 +518,8 @@ void createInterfaces(std::vector<std::map<int,char> >& attributes,
 void CpGridData::distributeGlobalGrid(const CpGrid& grid,
                                       const CpGridData& view_data,
                                       const std::vector<int>& cell_part,
-                                      int overlap_layers, int ghostLast)
+                                      int overlap_layers, int ghostLast,
+				      const double* trans)
 {
 #if HAVE_MPI
     Dune::CollectiveCommunication<Dune::MPIHelper::MPICommunicator>& ccobj=ccobj_;
@@ -535,7 +536,11 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
 
     //bool reorder = ghostLast==1;
     overlap.resize(cell_part.size());
-    addOverlapLayer(grid, cell_part, overlap, my_rank, false, overlap_layers);
+    if (ghostLast < 4)
+	addOverlapLayer(grid, cell_part, overlap, my_rank, overlap_layers, false);
+    else
+	addOverlapLayerNoTrans(grid, cell_part, overlap, my_rank, overlap_layers, false, trans);
+
     std::vector<int> naturalOrder;
     std::vector<int> pType;
     findInteriorAndOverlapCells(overlap, cell_part, my_rank, naturalOrder, pType);
@@ -571,7 +576,7 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
          * region.
          * @param owner Does myrank own this index.
          */
-        void operator() (int i, const std::set<int>& ov, bool owner)
+	void operator() (int i, const std::set<int>& ov, bool owner)
         {
             if(owner)
             {
@@ -590,6 +595,7 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
                 }
             }
         }
+	
     } cell_counter;
     cell_counter.myrank=my_rank;
     cell_counter.count=0;

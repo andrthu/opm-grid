@@ -34,7 +34,8 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
                                const std::vector<const OpmWellType*> * wells,
                                const double* transmissibilities,
                                const CollectiveCommunication<MPI_Comm>& cc,
-                               int weightsMethod, bool useObjWgt, int root)
+                               int weightsMethod, bool useObjWgt, 
+			       std::vector<double> catW, int root)
 {
     int rc = ZOLTAN_OK - 1;
     float ver = 0;
@@ -83,7 +84,8 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
                                                        transmissibilities,
                                                        partitionIsEmpty, 
 						       weightsMethod,
-						       useObjWgt));
+						       useObjWgt,
+						       catW));
 
         Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, *grid_and_wells,
                                                     partitionIsEmpty);

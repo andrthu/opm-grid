@@ -370,8 +370,8 @@ CombinedGridWellGraph::CombinedGridWellGraph(const CpGrid& grid,
                                              const std::vector<const OpmWellType*> * wells,
                                              const double* transmissibilities,
                                              bool pretendEmptyGrid, int edgeWeightsMethod,
-					     bool useObjWgt)
-    : grid_(grid), transmissibilities_(transmissibilities), edgeWeightsMethod_(edgeWeightsMethod) 
+					     bool useObjWgt, std::vector<double> catW)
+    : grid_(grid), transmissibilities_(transmissibilities), edgeWeightsMethod_(edgeWeightsMethod), catW_(catW) 
 {
     if ( pretendEmptyGrid )
     {
