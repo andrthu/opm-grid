@@ -150,7 +150,7 @@ CpGrid::scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
     {
         distributed_data_.reset(new cpgrid::CpGridData(new_comm));
         distributed_data_->distributeGlobalGrid(*this,*this->current_view_data_, cell_part,
-                                                overlapLayers, reorderLocal,transmissibilities);
+                                                overlapLayers, reorderLocal, transmissibilities);
         int num_cells = distributed_data_->cell_to_face_.size();
         std::ostringstream message;
         message << "After loadbalancing process " << my_num << " has " << num_cells << " cells.";

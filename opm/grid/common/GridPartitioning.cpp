@@ -332,16 +332,13 @@ void addOverlapLayerNoTrans(const CpGrid& grid, int cell, const int owner,
 			    std::vector<std::set<int> >& cell_overlap, int recursion_deps,
 			    const double* trans)
 {
-    const CpGrid::LeafIndexSet& ix = grid.leafIndexSet();
-    //for (CpGrid::LeafIntersectionIterator iit = e.ileafbegin(); iit != e.ileafend(); ++iit) {
-    //int index = ix.index(e);
     for (int loc_face = 0; loc_face < grid.numCellFaces(cell); ++loc_face) {
 	int face = grid.cellFace(cell, loc_face);
 	int faceCell0 = grid.faceCell(face, 0);
 	int faceCell1 = grid.faceCell(face, 1);
 	int otherCell = faceCell0!=cell ? faceCell0 : faceCell1;
 
-	if ( otherCell != 0 ) {
+	if ( otherCell != -1 ) {
 	    if ( trans[face] != 0.0 ) {
 		int nbr = otherCell;
 		if ( cell_part[nbr] != owner )

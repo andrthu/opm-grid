@@ -533,13 +533,15 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
 #endif // #ifdef DEBUG
     // vector with the set of ranks that
     std::vector<std::set<int> > overlap;
-
+    
     //bool reorder = ghostLast==1;
     overlap.resize(cell_part.size());
     if (ghostLast < 4)
 	addOverlapLayer(grid, cell_part, overlap, my_rank, overlap_layers, false);
-    else
+    else {
+	if (my_rank == 0) {std::cout << "No zero trans connections" << std::endl;}
 	addOverlapLayerNoTrans(grid, cell_part, overlap, my_rank, overlap_layers, false, trans);
+    }
 
     std::vector<int> naturalOrder;
     std::vector<int> pType;
