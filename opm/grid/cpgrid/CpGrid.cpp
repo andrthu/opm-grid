@@ -149,8 +149,14 @@ CpGrid::scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
         distributed_data_.reset(new cpgrid::CpGridData(new_comm));
         distributed_data_->distributeGlobalGrid(*this,*this->current_view_data_, cell_part,
                                                 overlapLayers);
-        std::cout << "After loadbalancing process " << my_num << " has " <<
-            distributed_data_->cell_to_face_.size() << " cells." << std::endl;
+        int num_cells = distributed_data_->cell_to_face_.size();
+        std::ostringstream message;
+        message << "After loadbalancing process " << my_num << " has " << num_cells << " cells.";
+        if (num_cells == 0) {
+            throw std::runtime_error(message.str() + " Aborting.");
+        } else {
+            std::cout << message.str() << "\n";
+        }
 
         // add an interface for gathering/scattering data with communication
         // forward direction will be scatter and backward gather
@@ -248,8 +254,7 @@ CpGrid::scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
         g.coord = &coord[0];
         g.zcorn = &zcorn[0];
         g.actnum = &actnum[0];
-        std::map<int,int> nnc;
-        current_view_data_->processEclipseFormat(g, nnc, 0.0, false, false);
+        current_view_data_->processEclipseFormat(g, {}, 0.0, false, false);
     }
 
     void CpGrid::readSintefLegacyFormat(const std::string& grid_prefix)
@@ -266,19 +271,19 @@ CpGrid::scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
     void CpGrid::processEclipseFormat(const Opm::EclipseGrid& ecl_grid,
                                       bool periodic_extension,
                                       bool turn_normals, bool clip_z,
-                                      const std::vector<double>& poreVolume)
+                                      const std::vector<double>& poreVolume,
+                                      const Opm::NNC& nncs)
     {
         current_view_data_->processEclipseFormat(ecl_grid, periodic_extension,
                                                  turn_normals, clip_z,
-                                                 poreVolume);
+                                                 poreVolume, nncs);
     }
 #endif
 
     void CpGrid::processEclipseFormat(const grdecl& input_data, double z_tolerance,
                                       bool remove_ij_boundary, bool turn_normals)
     {
-        std::map<int,int> nnc;
-        current_view_data_->processEclipseFormat(input_data, nnc, z_tolerance, remove_ij_boundary, turn_normals);
+        current_view_data_->processEclipseFormat(input_data, {}, z_tolerance, remove_ij_boundary, turn_normals);
     }
 
 } // namespace Dune
