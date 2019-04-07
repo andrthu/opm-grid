@@ -371,7 +371,7 @@ CombinedGridWellGraph::CombinedGridWellGraph(const CpGrid& grid,
                                              const double* transmissibilities,
                                              bool pretendEmptyGrid, int edgeWeightsMethod,
 					     bool useObjWgt, std::vector<double> catW)
-    : grid_(grid), transmissibilities_(transmissibilities), edgeWeightsMethod_(edgeWeightsMethod), catW_(catW) 
+    : grid_(grid), transmissibilities_(transmissibilities), edgeWeightsMethod_(edgeWeightsMethod), catW_(catW)
 {
     if ( pretendEmptyGrid )
     {
@@ -392,14 +392,14 @@ CombinedGridWellGraph::CombinedGridWellGraph(const CpGrid& grid,
     addCompletionSetToGraph();
 
     //call function needed for logaritmic edge weights
-    if (edgeWeightsMethod_ == 2 || edgeWeightsMethod_ == 3)
+    if (edgeWeightsMethod == 2 || edgeWeightsMethod == 3)
 	findMaxMinTrans();
 
     //call function required for category weights.
-    if (edgeWeightsMethod_ == 4)
+    if (edgeWeightsMethod == 4)
 	sortTrans();
     //call function required for nrmalised trans weights.
-    if (edgeWeightsMethod_ == 5)
+    if (edgeWeightsMethod == 5)
 	findDiagNormalized();
 
     //call function needed for vertex weights
