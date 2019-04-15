@@ -310,6 +310,7 @@ void addOverlapLayer(const CpGrid& grid, const std::vector<int>& cell_part,
 {
     cell_overlap.resize(cell_part.size());
     const CpGrid::LeafIndexSet& ix = grid.leafIndexSet();
+    //std::cout << "In AOL " << layers << " "<< mypart << " " << all <<std::endl;
     for (CpGrid::Codim<0>::LeafIterator it = grid.leafbegin<0>();
 	 it != grid.leafend<0>(); ++it) {
 	int index = ix.index(*it);
@@ -319,7 +320,10 @@ void addOverlapLayer(const CpGrid& grid, const std::vector<int>& cell_part,
 	else
         {
 	    if(all)
+	    {
+		//if (mypart==0){std::cout << "In all"<<std::endl;}
 		owner=cell_part[index];
+	    }
 	    else
 		continue;
 	}
@@ -384,29 +388,34 @@ void findInteriorAndOverlapCells(std::vector<std::set<int>>& overlap, const std:
     auto ci = cell_part.begin();
     auto begin = overlap.begin();
     partitionType.resize(cell_part.size(), 0);
-
-    for (auto i = begin; i!=overlap.end(); ++i, ++ci) {
+    
+    //int tull = begin;
+    //std::cout << *begin << " " << my_rank << std::endl;
+    int gid = 0;
+    for (auto i = begin; i != overlap.end(); ++i, ++ci, ++gid) {
+	//std::cout << i-begin << " "<< my_rank << " "<< *ci<<std::endl;
 	if (i->size()) {
 	    if (*ci == my_rank) {
-		naturalOrder.push_back(i-begin);
-		partitionType[i-begin] = 2;
+		naturalOrder.push_back(gid);
+		partitionType[gid] = 2;
 	    }
 	    else {
 		auto isO = i->find(my_rank);
 		if (isO != i->end()) {
-		    naturalOrder.push_back(i-begin);
-		    partitionType[i-begin] = 1;
+		    naturalOrder.push_back(gid);
+		    partitionType[gid] = 1;
 		}
 	    }
 	}
 	else {
 	    if (*ci == my_rank) {
-		naturalOrder.push_back(i-begin);
-		partitionType[i-begin] = 2;
+		naturalOrder.push_back(gid);
+		partitionType[gid] = 2;
 	    }
 	}
     }
 }
+
 int interiorCMK(const CpGrid& grid, const std::vector<int>& naturalOrder, const std::vector<int>& pType,
 		 std::vector<int>& l2g) 
 {

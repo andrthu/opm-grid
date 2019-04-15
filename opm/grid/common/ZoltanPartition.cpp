@@ -53,7 +53,8 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     }
 
     Zoltan_Set_Param(zz, "IMBALANCE_TOL", "1.05");
-    Zoltan_Set_Param(zz, "DEBUG_LEVEL", "0");
+    Zoltan_Set_Param(zz, "SEED", "123456789");
+    Zoltan_Set_Param(zz, "DEBUG_LEVEL", "2");
     Zoltan_Set_Param(zz, "LB_METHOD", "GRAPH");
     Zoltan_Set_Param(zz, "LB_APPROACH", "PARTITION");
     Zoltan_Set_Param(zz, "NUM_GID_ENTRIES", "1");
@@ -74,7 +75,7 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     if( wells )
     {
 	if (useObjWgt) {
-	    if (!partitionIsEmpty) {std::cout<<"Using vertex weights"<<std::endl;}
+	    if (!partitionIsEmpty) {std::cout<< "Using vertex weights" <<std::endl;}
 	    Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "1");
 	}
 	
