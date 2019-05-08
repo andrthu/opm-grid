@@ -165,7 +165,7 @@ public:
     double logTransmissibilityWeights(int face_index) const
     {
 	double trans = transmissibilities_[face_index]; 
-	return trans == 0.0 ? 1.0 : 1.0 + std::log(trans) - log_min_;
+	return trans == 0.0 ? 0.0 : 1.0 + std::log(trans) - log_min_;
     }
 
     double logTransmissibilityWeights2(int face_index) const
@@ -177,7 +177,7 @@ public:
     double catagoryTransWeights(int face_index) const
     {
 	double trans = transmissibilities_[face_index];
-	if (trans == 0) {return 0.1;}
+	if (trans == 0.0) {return 0.0;}
 	if (trans < trans_bound_[0]) {return catW_[0];}
 	if (trans < trans_bound_[1]) {return catW_[1];}
 	return catW_[2];
@@ -191,10 +191,16 @@ public:
 	return trans/std::sqrt(d0*d1);
     }
 
+    double uniformWeights(int face) const
+    {
+	if (transmissibilities_[face] == 0.0) {return 0;}
+	return 1.0;
+    }
+
     double edgeWeight(int face_index, int cell1, int cell2) const
     {
 	if (edgeWeightsMethod_ == 0)
-	    return 1.0;
+	    return uniformWeights(face_index);
 	else if (edgeWeightsMethod_ == 1)
 	    return transmissibility(face_index);
 	else if (edgeWeightsMethod_ == 2)
