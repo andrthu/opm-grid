@@ -244,7 +244,7 @@ private:
 	diag_normalized_.resize(N, 0.0);
 	for (int cell = 0; cell < N; ++cell)
 	{
-	    double diag_val;
+	    double diag_val = 0;
 	    for ( int local_face = 0; local_face < grid_.numCellFaces(cell); ++local_face )
 	    {
 		const int face  = grid_.cellFace(cell, local_face);
@@ -317,10 +317,11 @@ private:
     std::vector<int> vertexWeightsWithWells_;
     std::vector<double> trans_bound_;
     std::vector<double> diag_normalized_;
-    std::vector<double> catW_;
 
     int edgeWeightsMethod_;
     double log_min_;
+
+    std::vector<double> catW_;
 };
 
 
@@ -334,6 +335,27 @@ void setCpGridZoltanGraphFunctions(Zoltan_Struct *zz, const Dune::CpGrid& grid,
 void setCpGridZoltanGraphFunctions(Zoltan_Struct *zz,
                                    const CombinedGridWellGraph& graph,
                                    bool pretendNull);
+
+void getCpGridHyperGraphSize(void *graphPointer, int* num_lists,
+			     int *num_pins, int *format, int *err);
+
+void getNullHyperGraphSize(void *graphPointer, int* num_lists,
+			   int *num_pins, int *format, int *err);
+
+void getCpGridHyperGraphList(void *graphPointer, int num_gid_entries, 
+			     int num_vtx_edge, int num_pins, int format,
+			     ZOLTAN_ID_PTR vtxedge_GID, int *vtxedge_ptr, 
+			     ZOLTAN_ID_PTR pin_GID, int *err);
+
+void getNullHyperGraphList(void *graphPointer, int num_gid_entries, 
+			   int num_vtx_edge, int num_pins, int format,
+			   ZOLTAN_ID_PTR vtxedge_GID, int *vtxedge_ptr,
+			   ZOLTAN_ID_PTR pin_GID, int *err);
+
+void setCpGridZoltanHyperGraphFunctions(Zoltan_Struct *zz,
+					const CombinedGridWellGraph& graph,
+					bool pretendNull);
+
 } // end namespace cpgrid
 } // end namespace Dune
 

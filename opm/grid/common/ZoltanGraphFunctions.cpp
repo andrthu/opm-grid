@@ -448,6 +448,129 @@ void setCpGridZoltanGraphFunctions(Zoltan_Struct *zz,
         Zoltan_Set_Edge_List_Multi_Fn(zz, getCpGridWellsEdgeList, graphPointer);
     }
 }
+
+void getCpGridHyperGraphSize(void *graphPointer, int* num_lists,
+			     int *num_pins, int *format, int *err)
+{
+    *format = ZOLTAN_COMPRESSED_EDGE;
+
+    const CombinedGridWellGraph& graph =
+        *static_cast<const CombinedGridWellGraph*>(graphPointer);
+    const Dune::CpGrid&  grid = graph.getGrid();
+    
+    int numCells = grid.numCells();
+    *num_lists = numCells;
+    
+    int numEdges = 0;
+    for( int i = 0; i < numCells;  i++ )
+    {
+        // Initial set of faces is the ones of the well completions
+	auto edges = graph.getWellsGraph()[i];
+        // For the graph there is an edge only if the face has two neighbors.
+        // Therefore we need to check each face
+
+        for ( int local_face = 0; local_face < grid.numCellFaces(i); ++local_face )
+        {
+            const int face  = grid.cellFace(i, local_face);
+            const int face0 = grid.faceCell(face, 0);
+            const int face1 = grid.faceCell(face, 1);
+	    const int cellNab = face0 == i ? face1 : face0;
+
+            if ( cellNab != -1 )
+            {
+		edges.insert(cellNab);
+            }
+        }
+        numEdges += edges.size();
+    }
+    
+    *num_pins = numEdges;
+    *err = ZOLTAN_OK;
+}
+void getNullHyperGraphSize(void *graphPointer, int* num_lists,
+			   int *num_pins, int *format, int *err)
+{
+    (void) graphPointer;
+    *num_lists = 0;
+    *num_pins = 0;
+    *format = ZOLTAN_COMPRESSED_EDGE;
+
+    *err = ZOLTAN_OK;
+}
+
+void getCpGridHyperGraphList(void *graphPointer, int num_gid_entries, 
+			     int num_vtx_edge, int num_pins, int format,
+			     ZOLTAN_ID_PTR vtxedge_GID, int *vtxedge_ptr, 
+			     ZOLTAN_ID_PTR pin_GID, int *err)
+{
+    const CombinedGridWellGraph& graph =
+        *static_cast<const CombinedGridWellGraph*>(graphPointer);
+    const Dune::CpGrid&  grid = graph.getGrid();
+
+    int numCells = grid.numCells();
+
+    int edgeIdx = 0;
+    for( int i = 0; i < numCells;  i++ )
+    {
+	vtxedge_GID[i] = i;
+	auto cellConn = graph.getWellsGraph()[i];
+	vtxedge_ptr[i] = edgeIdx;
+
+	for ( int local_face = 0; local_face < grid.numCellFaces(i); ++local_face )
+        {
+            const int face  = grid.cellFace(i, local_face);
+            const int face0 = grid.faceCell(face, 0);
+            const int face1 = grid.faceCell(face, 1);
+	    const int cellNab = face0 == i ? face1 : face0;
+
+            if ( cellNab != -1 )
+            {
+		cellConn.insert(cellNab);
+            }
+        }
+
+	for (auto cell = cellConn.begin(); cell != cellConn.end(); ++cell)
+	{
+	    pin_GID[edgeIdx] = *cell;
+	    edgeIdx++;
+	}
+    }
+    *err = ZOLTAN_OK;
+}
+void getNullHyperGraphList(void *graphPointer, int num_gid_entries, 
+			   int num_vtx_edge, int num_pins, int format,
+			   ZOLTAN_ID_PTR vtxedge_GID, int *vtxedge_ptr, 
+			   ZOLTAN_ID_PTR pin_GID, int *err)
+{
+    (void) graphPointer; (void) num_gid_entries; (void) num_vtx_edge; 
+    (void) num_pins; (void) format; (void) vtxedge_GID;
+    (void) vtxedge_ptr; (void) pin_GID;
+    
+    *err = ZOLTAN_OK;
+}
+
+void setCpGridZoltanHyperGraphFunctions(Zoltan_Struct *zz,
+					const CombinedGridWellGraph& graph,
+					bool pretendNull)
+{
+    Dune::CpGrid *gridPointer = const_cast<Dune::CpGrid*>(&graph.getGrid());
+    if ( pretendNull )
+    {
+        Zoltan_Set_Num_Obj_Fn(zz, getNullNumCells, gridPointer);
+        Zoltan_Set_Obj_List_Fn(zz, getNullVertexList, gridPointer);
+	Zoltan_Set_HG_Size_CS_Fn(zz, getNullHyperGraphSize, gridPointer);
+	Zoltan_Set_HG_CS_Fn(zz, getNullHyperGraphList, gridPointer);
+    }
+    else
+    {
+        CombinedGridWellGraph* graphPointer = const_cast<CombinedGridWellGraph*>(&graph);
+        Zoltan_Set_Num_Obj_Fn(zz, getCpGridNumCells, gridPointer);
+        Zoltan_Set_Obj_List_Fn(zz, getCpGridWellsVertexList, graphPointer);
+	Zoltan_Set_HG_Size_CS_Fn(zz, getCpGridHyperGraphSize, graphPointer);
+	Zoltan_Set_HG_CS_Fn(zz, getCpGridHyperGraphList, graphPointer);
+    }
+}
+
 } // end namespace cpgrid
 } // end namespace Dune
 #endif // HAVE_ZOLTAN

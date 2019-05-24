@@ -55,15 +55,23 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     Zoltan_Set_Param(zz, "IMBALANCE_TOL", "1.05");
     Zoltan_Set_Param(zz, "SEED", "123456789");
     Zoltan_Set_Param(zz, "DEBUG_LEVEL", "2");
-    Zoltan_Set_Param(zz, "LB_METHOD", "GRAPH");
-    Zoltan_Set_Param(zz, "LB_APPROACH", "PARTITION");
-    Zoltan_Set_Param(zz, "NUM_GID_ENTRIES", "1");
-    Zoltan_Set_Param(zz, "NUM_LID_ENTRIES", "1");
-    Zoltan_Set_Param(zz, "RETURN_LISTS", "ALL");
-    Zoltan_Set_Param(zz, "CHECK_GRAPH", "2");
-    Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM","0");
-    Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "0");
-    Zoltan_Set_Param(zz, "PHG_EDGE_SIZE_THRESHOLD", ".35");  /* 0-remove all, 1-remove none */
+
+    if (weightsMethod != 6) {
+	
+	Zoltan_Set_Param(zz, "LB_METHOD", "GRAPH");
+	Zoltan_Set_Param(zz, "LB_APPROACH", "PARTITION");
+	Zoltan_Set_Param(zz, "NUM_GID_ENTRIES", "1");
+	Zoltan_Set_Param(zz, "NUM_LID_ENTRIES", "1");
+	Zoltan_Set_Param(zz, "RETURN_LISTS", "ALL");
+	Zoltan_Set_Param(zz, "CHECK_GRAPH", "2");
+	Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM","0");
+	Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "0");
+	Zoltan_Set_Param(zz, "PHG_EDGE_SIZE_THRESHOLD", ".35");  /* 0-remove all, 1-remove none */
+    }
+    else {
+	Zoltan_Set_Param(zz, "LB_METHOD", "HYPERGRAPH");
+	Zoltan_Set_Param(zz, "LB_APPROACH", "PARTITION");
+    }
 
     // For the load balancer one process has the whole grid and
     // all others an empty partition before loadbalancing.
@@ -79,7 +87,8 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
 	    Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "1");
 	}
 	
-        Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM", "1");
+	
+
         grid_and_wells.reset(new CombinedGridWellGraph(cpgrid,
                                                        wells,
                                                        transmissibilities,
@@ -87,9 +96,14 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
 						       weightsMethod,
 						       useObjWgt,
 						       catW));
-
-        Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, *grid_and_wells,
-                                                    partitionIsEmpty);
+	if (weightsMethod != 6) {
+	    Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM", "1");
+	    Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, *grid_and_wells,
+							partitionIsEmpty);
+	} else {
+	    Dune::cpgrid::setCpGridZoltanHyperGraphFunctions(zz, *grid_and_wells,
+							     partitionIsEmpty);
+	}
     }
     else
     {
