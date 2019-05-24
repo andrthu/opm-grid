@@ -352,9 +352,23 @@ void getNullHyperGraphList(void *graphPointer, int num_gid_entries,
 			   ZOLTAN_ID_PTR vtxedge_GID, int *vtxedge_ptr,
 			   ZOLTAN_ID_PTR pin_GID, int *err);
 
+void getCpGridHyperGraphWgtSize(void *graphPointer, int *num_edges, int *err);
+
+void getNullHyperGraphWgtSize(void *graphPointer, int *num_edges, int *err);
+
+void getCpGridHyperGraphWgtVal(void *graphPointer, int num_gid_entries, 
+			       int num_lid_entries, int num_edges, 
+			       int edge_weight_dim, ZOLTAN_ID_PTR edge_GID, 
+			       ZOLTAN_ID_PTR edge_LID, float  *edge_weight, int *err);
+
+void getNullHyperGraphWgtVal(void *graphPointer, int num_gid_entries, 
+			     int num_lid_entries, int num_edges, 
+			     int edge_weight_dim, ZOLTAN_ID_PTR edge_GID, 
+			     ZOLTAN_ID_PTR edge_LID, float  *edge_weight, int *err);
+
 void setCpGridZoltanHyperGraphFunctions(Zoltan_Struct *zz,
 					const CombinedGridWellGraph& graph,
-					bool pretendNull);
+					bool pretendNull, bool useWgt);
 
 } // end namespace cpgrid
 } // end namespace Dune

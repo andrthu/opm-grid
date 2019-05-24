@@ -96,13 +96,13 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
 						       weightsMethod,
 						       useObjWgt,
 						       catW));
+	Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM", "1");
 	if (weightsMethod != 6) {
-	    Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM", "1");
 	    Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, *grid_and_wells,
 							partitionIsEmpty);
 	} else {
 	    Dune::cpgrid::setCpGridZoltanHyperGraphFunctions(zz, *grid_and_wells,
-							     partitionIsEmpty);
+							     partitionIsEmpty, true);
 	}
     }
     else
