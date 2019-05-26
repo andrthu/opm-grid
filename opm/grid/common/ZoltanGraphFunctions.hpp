@@ -219,6 +219,11 @@ public:
     {
         return well_indices_;
     }
+    int getEdgeWeightsMethod() const
+    {
+	return edgeWeightsMethod_;
+    }
+
 private:
 
     void addCompletionSetToGraph()

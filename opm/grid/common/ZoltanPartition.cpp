@@ -56,7 +56,7 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     Zoltan_Set_Param(zz, "SEED", "123456789");
     Zoltan_Set_Param(zz, "DEBUG_LEVEL", "2");
 
-    if (weightsMethod != 6) {
+    if (weightsMethod < 6) {
 	
 	Zoltan_Set_Param(zz, "LB_METHOD", "GRAPH");
 	Zoltan_Set_Param(zz, "LB_APPROACH", "PARTITION");
@@ -97,7 +97,7 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
 						       useObjWgt,
 						       catW));
 	Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM", "1");
-	if (weightsMethod != 6) {
+	if (weightsMethod < 6) {
 	    Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, *grid_and_wells,
 							partitionIsEmpty);
 	} else {

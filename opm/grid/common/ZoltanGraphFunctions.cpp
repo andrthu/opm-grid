@@ -459,15 +459,25 @@ void getCpGridHyperGraphSize(void *graphPointer, int* num_lists,
     const Dune::CpGrid&  grid = graph.getGrid();
     
     int numCells = grid.numCells();
-    *num_lists = numCells;
     
+    
+    bool wellSepEdge = graph.getEdgeWeightsMethod() == 7;
+    int numWellEdge = 0;
+
     int numEdges = 0;
     for( int i = 0; i < numCells;  i++ )
     {
         // Initial set of faces is the ones of the well completions
 	auto edges = graph.getWellsGraph()[i];
+	if (wellSepEdge) {
+	    if(edges.size() > 0) {
+		numWellEdge++;
+	    }
+	}
 
 	edges.insert(i);
+	std::set<int> meshEdges;
+	meshEdges.insert(i);
 
         for ( int local_face = 0; local_face < grid.numCellFaces(i); ++local_face )
         {
@@ -478,12 +488,21 @@ void getCpGridHyperGraphSize(void *graphPointer, int* num_lists,
 
             if ( cellNab != -1 )
             {
-		edges.insert(cellNab);
+		if ( graph.transmissibility(face) != 0.0 ) {
+		    if (wellSepEdge)
+			meshEdges.insert(cellNab);
+		    else
+			edges.insert(cellNab);
+		}
             }
         }
-        numEdges += edges.size();
+	if (wellSepEdge)
+	    numEdges += edges.size() + meshEdges.size();
+	else
+	    numEdges += edges.size();
     }
-    
+
+    *num_lists = numCells + numWellEdge;
     *num_pins = numEdges;
     *err = ZOLTAN_OK;
 }
@@ -508,16 +527,42 @@ void getCpGridHyperGraphList(void *graphPointer, int num_gid_entries,
     const Dune::CpGrid&  grid = graph.getGrid();
 
     int numCells = grid.numCells();
+    bool wellSepEdge = graph.getEdgeWeightsMethod() == 7;
 
+    int hyperEdgeIdx = 0;
     int edgeIdx = 0;
     for( int i = 0; i < numCells;  i++ )
     {
-	vtxedge_GID[i] = i;
-	auto cellConn = graph.getWellsGraph()[i];
+	
+	auto wellConn = graph.getWellsGraph()[i];
+	std::set<int> cellConn;
+
+	if ( wellSepEdge )
+	{
+	    if ( wellConn.size() > 0 )
+	    {
+		vtxedge_GID[hyperEdgeIdx] = hyperEdgeIdx;
+		vtxedge_ptr[hyperEdgeIdx] = edgeIdx;
+		hyperEdgeIdx++;
+
+		wellConn.insert(i);
+		for ( auto cell = wellConn.begin(); cell != wellConn.end(); ++cell )
+		{
+		    pin_GID[edgeIdx] = *cell;
+		    edgeIdx++;
+		}
+	    }
+	    
+	}else 
+	{
+	    cellConn = wellConn;
+	}
+
+	vtxedge_GID[hyperEdgeIdx] = hyperEdgeIdx;
+	vtxedge_ptr[hyperEdgeIdx] = edgeIdx;
+	hyperEdgeIdx++;
 
 	cellConn.insert(i);
-
-	vtxedge_ptr[i] = edgeIdx;
 
 	for ( int local_face = 0; local_face < grid.numCellFaces(i); ++local_face )
         {
@@ -528,7 +573,8 @@ void getCpGridHyperGraphList(void *graphPointer, int num_gid_entries,
 
             if ( cellNab != -1 )
             {
-		cellConn.insert(cellNab);
+		if ( graph.transmissibility(face) != 0.0 )
+		    cellConn.insert(cellNab);
             }
         }
 
@@ -559,7 +605,18 @@ void getCpGridHyperGraphWgtSize(void *graphPointer, int *num_edges, int *err)
     const Dune::CpGrid&  grid = graph.getGrid();
     
     int numCells = grid.numCells();
-    *num_edges = numCells;
+    int numWellEdges = 0;
+    bool wellSepEdge = graph.getEdgeWeightsMethod() == 7;
+    if ( wellSepEdge )
+    {
+	for ( int i = 0; 0 < numCells; ++i ) {
+	    auto wellConn = graph.getWellsGraph()[i];
+	    if ( wellConn.size() > 0 )
+		numWellEdges++;
+	}
+    }
+    
+    *num_edges = numCells + numWellEdges;
 
     *err = ZOLTAN_OK;
 }
@@ -582,21 +639,31 @@ void getCpGridHyperGraphWgtVal(void *graphPointer, int num_gid_entries,
     const Dune::CpGrid&  grid = graph.getGrid();
     
     int numCells = grid.numCells();
+    bool wellSepEdge = graph.getEdgeWeightsMethod() == 7;
 
     int edgeIdx = 0;
     for( int i = 0; i < numCells;  i++ )
     {
-	
 	auto wells = graph.getWellsGraph()[i];
-	edge_GID[i] = i;
-	edge_LID[i] = i;
-	if (wells.size() > 0)
+	edge_GID[edgeIdx] = edgeIdx;
+	edge_LID[edgeIdx] = edgeIdx;
+	if ( wells.size() > 0 )
 	{
-	    edge_weight[i] = 1000*numCells;
-	} else 
+	    if ( wellSepEdge ) {
+		edge_weight[edgeIdx] = 1000*numCells;
+		edgeIdx++;
+
+		edge_GID[edgeIdx] = edgeIdx;
+		edge_LID[edgeIdx] = edgeIdx;
+		edge_weight[edgeIdx] = 1.0;
+	    }else {
+		edge_weight[edgeIdx] = 1000*numCells;
+	    }
+	} else
 	{
-	    edge_weight[i] = 1.0;
+	    edge_weight[edgeIdx] = 1.0;
 	}
+	edgeIdx++;
     }
     *err = ZOLTAN_OK;
 }
