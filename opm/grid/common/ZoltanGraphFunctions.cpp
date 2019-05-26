@@ -609,7 +609,7 @@ void getCpGridHyperGraphWgtSize(void *graphPointer, int *num_edges, int *err)
     bool wellSepEdge = graph.getEdgeWeightsMethod() == 7;
     if ( wellSepEdge )
     {
-	for ( int i = 0; 0 < numCells; ++i ) {
+	for ( int i = 0; i < numCells; ++i ) {
 	    auto wellConn = graph.getWellsGraph()[i];
 	    if ( wellConn.size() > 0 )
 		numWellEdges++;
