@@ -54,7 +54,7 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
 
     Zoltan_Set_Param(zz, "IMBALANCE_TOL", "1.05");
     Zoltan_Set_Param(zz, "SEED", "123456789");
-    Zoltan_Set_Param(zz, "DEBUG_LEVEL", "2");
+    Zoltan_Set_Param(zz, "DEBUG_LEVEL", "0");
 
     if (weightsMethod < 6) {
 	

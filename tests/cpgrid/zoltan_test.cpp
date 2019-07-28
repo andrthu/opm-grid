@@ -41,18 +41,6 @@ public:
   int errorcode;
 };
 
-#ifdef HAVE_MPI
-void MPI_err_handler(MPI_Comm *, int *err_code, ...){
-  char *err_string=new char[MPI_MAX_ERROR_STRING];
-  int err_length;
-  MPI_Error_string(*err_code, err_string, &err_length);
-  std::string s(err_string, err_length);
-  std::cerr << "An MPI Error ocurred:"<<std::endl<<s<<std::endl;
-  delete[] err_string;
-  throw MPIError(s, *err_code);
-}
-#endif
-
 BOOST_AUTO_TEST_CASE(zoltan)
 {
 
@@ -96,12 +84,9 @@ BOOST_AUTO_TEST_CASE(zoltan)
         Zoltan_Set_Param(zz, "CHECK_GRAPH", "2");
         Zoltan_Set_Param(zz, "PHG_EDGE_SIZE_THRESHOLD", ".35");  /* 0-remove all, 1-remove none */
 
-        MPI_Errhandler handler;
-        MPI_Errhandler_create(MPI_err_handler, &handler);
-        MPI_Errhandler_set(MPI_COMM_WORLD, handler);
         MPI_Comm_size(MPI_COMM_WORLD, &procs);
         MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
-
+	
         Dune::CpGrid grid;
         std::array<int, 3> dims={{1, 2, 2}};
         std::array<double, 3> size={{ 1.0, 1.0, 1.0}};

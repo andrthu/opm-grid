@@ -216,7 +216,145 @@ CpGrid::scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
 #endif
 }
 
+    std::vector<int> CpGrid::getCellPartition(const std::vector<const cpgrid::OpmWellType *> * wells,
+					      const double* transmissibilities,
+					      int overlapLayers, int edgeWeightsMethod)
+{
+    CollectiveCommunication cc(MPI_COMM_WORLD);
 
+    int my_num=cc.rank();
+
+    std::vector<double> dum = {0,0,0};
+    auto part_and_wells =
+        cpgrid::zoltanGraphPartitionGridOnRoot(*this, wells, transmissibilities, cc, edgeWeightsMethod, 0, dum, 0);
+    int num_parts = cc.size();
+    using std::get;
+    auto cell_part = std::get<0>(part_and_wells);
+
+    return cell_part;
+}
+
+std::pair<bool, std::unordered_set<std::string> >
+CpGrid::scatterCellPartition(std::vector<int>& cell_part, const std::vector<const cpgrid::OpmWellType *> * wells,
+			     int overlapLayers)
+{
+    static_cast<void>(wells);
+    static_cast<void>(overlapLayers);
+    
+    if(distributed_data_)
+    {
+        std::cerr<<"There is already a distributed version of the grid."
+                 << " Maybe scatterGrid was called before?"<<std::endl;
+        return std::make_pair(false, std::unordered_set<std::string>());
+    }
+
+    CollectiveCommunication cc(MPI_COMM_WORLD);
+    int my_num = cc.rank();
+    int num_parts = cc.size();
+    
+    std::unordered_set<std::string> defunct_wells;
+
+    if ( wells )
+    {
+	const auto& cpgdim =  logicalCartesianSize();
+	std::vector<int> cartesian_to_compressed(cpgdim[0]*cpgdim[1]*cpgdim[2], -1);
+	for( int i = 0; i < numCells(); ++i )
+	{
+	    cartesian_to_compressed[globalCell()[i]] = i;
+	}
+	
+        cpgrid::WellConnections well_connections(*wells,
+                                                 cpgdim,
+                                                 cartesian_to_compressed);
+
+        auto wells_on_proc =
+            cpgrid::postProcessPartitioningForWells(cell_part,*wells,
+						    well_connections,cc.size());
+        defunct_wells =
+	    cpgrid::computeDefunctWellNames(wells_on_proc,*wells,cc,0);
+    }
+
+    MPI_Comm new_comm = MPI_COMM_NULL;
+
+    if(num_parts < cc.size())
+    {
+        std::vector<int> ranks(num_parts);
+        for(int i=0; i<num_parts; ++i)
+            ranks[i]=i;
+        MPI_Group new_group;
+        MPI_Group old_group;
+        MPI_Comm_group(cc, &old_group);
+        MPI_Group_incl(old_group, num_parts, &(ranks[0]), &new_group);
+
+        // Not all procs take part in the parallel computation
+        MPI_Comm_create(cc, new_group, &new_comm);
+        cc=CollectiveCommunication(new_comm);
+    }else{
+        new_comm = cc;
+    }
+    if(my_num < cc.size())
+    {
+        distributed_data_.reset(new cpgrid::CpGridData(new_comm));
+        distributed_data_->distributeGlobalGrid(*this,*this->current_view_data_, cell_part,
+                                                overlapLayers, 1, nullptr);
+        int num_cells = distributed_data_->cell_to_face_.size();
+        std::ostringstream message;
+        message << "After loadbalancing process " << my_num << " has " << num_cells << " cells.";
+        if (num_cells == 0) {
+            throw std::runtime_error(message.str() + " Aborting.");
+        } else {
+            std::cout << message.str() << "\n";
+        }
+
+        // add an interface for gathering/scattering data with communication
+        // forward direction will be scatter and backward gather
+        cell_scatter_gather_interfaces_.reset(new InterfaceMap);
+
+        auto rank = distributed_data_->ccobj_.rank();
+
+        if ( rank == 0)
+        {
+            std::map<int, std::size_t> proc_to_no_cells;
+            for(auto cell_owner = cell_part.begin(); cell_owner != cell_part.end();
+                ++cell_owner)
+            {
+                ++proc_to_no_cells[*cell_owner];
+            }
+
+            for(const auto& proc_no_cells : proc_to_no_cells)
+            {
+                (*cell_scatter_gather_interfaces_)[proc_no_cells.first]
+                    .first.reserve(proc_no_cells.second);
+            }
+
+            std::size_t cell_index = 0;
+
+            for(auto cell_owner = cell_part.begin(); cell_owner != cell_part.end();
+                ++cell_owner, ++cell_index)
+            {
+                auto& indices = (*cell_scatter_gather_interfaces_)[*cell_owner];
+                indices.first.add(cell_index);
+            }
+
+        }
+
+        (*cell_scatter_gather_interfaces_)[0].second
+            .reserve(distributed_data_->cell_indexset_.size());
+
+        for( auto& index: distributed_data_->cell_indexset_)
+        {
+            typedef typename cpgrid::CpGridData::AttributeSet AttributeSet;
+            if ( index.local().attribute() == AttributeSet::owner)
+            {
+                auto& indices = (*cell_scatter_gather_interfaces_)[0];
+                indices.second.add(index.local());
+            }
+        }
+    }
+    current_view_data_ = distributed_data_.get();
+    return std::make_pair(true, defunct_wells);
+}
+    
     void CpGrid::createCartesian(const std::array<int, 3>& dims,
                                  const std::array<double, 3>& cellsize)
     {

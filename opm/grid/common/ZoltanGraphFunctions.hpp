@@ -171,7 +171,7 @@ public:
     double logTransmissibilityWeights2(int face_index) const
     {
 	double trans = transmissibilities_[face_index];
-	return trans == 0.0 ? 0.1 : 1.0 + std::log(trans) - log_min_;
+	return trans == 0.0 ? 0.0 : catW_[0] + (std::log(trans) - log_min_)*catW_[1];
     }
 
     double catagoryTransWeights(int face_index) const

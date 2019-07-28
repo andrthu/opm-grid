@@ -683,6 +683,29 @@ namespace Dune
             return ret;
         }
 
+	std::pair<bool, std::unordered_set<std::string> >
+        loadBalanceWithCellPartition(std::vector<int>& cell_part,
+				     const std::vector<const cpgrid::OpmWellType *> * wells,
+				     int overlapLayers=1)
+	{
+	    return scatterCellPartition(cell_part, wells, overlapLayers);
+	}
+
+	std::pair<bool, std::unordered_set<std::string> >
+        loadBalanceWithCellPartition(std::vector<int>& cell_part,
+				     int overlapLayers=1)
+	{
+	    return scatterCellPartition(cell_part, nullptr, overlapLayers);
+	}
+
+	std::vector<int>
+	getCellPartitionLoadBalance(const std::vector<const cpgrid::OpmWellType *> * wells,
+				    const double* transmissibilities,
+				    int overlapLayers, int edgeWeightsMethod)
+	{
+	    return getCellPartition(wells, transmissibilities, overlapLayers, edgeWeightsMethod);
+	}
+
         /// The new communication interface.
         /// \brief communicate objects for all codims on a given level
         /// \param data The data handle describing the data. Has to adhere to the
@@ -1310,6 +1333,17 @@ namespace Dune
                     int overlapLayers, int edgeWeightsMethod, int reorderLocal, bool useObjWgt,
 		    std::vector<double> catW);
 
+	/// \brief Partition grid using Zoltan and return cell_part.
+	std::vector<int> getCellPartition(const std::vector<const cpgrid::OpmWellType *> * wells,
+					  const double* transmissibilities,
+					  int overlapLayers, int edgeWeightsMethod);
+	
+	/// \brief Scatter a global grid to all processors using precalculated cell_part.
+	std::pair<bool, std::unordered_set<std::string> >
+	scatterCellPartition(std::vector<int>& cell_part,
+				     const std::vector<const cpgrid::OpmWellType *> * wells,
+				     int overlapLayers);
+	    
         /** @brief The data stored in the grid.
          *
          * All the data of the grid is stored there and
