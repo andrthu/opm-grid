@@ -535,129 +535,131 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
 
     overlap.resize(cell_part.size());
     addOverlapLayer(grid, cell_part, overlap, my_rank, overlap_layers, false);
+
+    std::vector<int> naturalOrder;
+    std::vector<int> pType;
+    findInteriorAndOverlapCells(overlap, cell_part, my_rank, naturalOrder, pType);
+    std::vector<int> l2g = reorderLocalCells(grid, naturalOrder, pType, 1);
+
     // count number of cells
     struct CellCounter
     {
-        int myrank;
-        int count;
-        typedef std::set<int>::const_iterator NeighborIterator;
-        std::set<int> neighbors;
-        typedef Dune::ParallelLocalIndex<AttributeSet> Index;
-        ParallelIndexSet* indexset;
-        std::vector<int> global2local;
-        /**
-         * @brief Adds an index with flag owner to the index set.
-         *
-         * An index is added if the rank is our rank.
-         * @param i The global index
-         * @param rank The rank that owns the index.
-         */
-        void operator() (int i, int rank)
-        {
-            if(rank==myrank)
-            {
-                global2local.push_back(count);
-                indexset->add(i, Index(count++, AttributeSet::owner, true));
-            }else
-                global2local.push_back(std::numeric_limits<int>::max());
-        }
-        /**
-         * @brief Adds an index that is present on more than one processor to the index set.
-         * @param i The global index.
-         * @param ov The set of ranks where the index is in the overlap
-         * region.
-         * @param rank The rank that owns this index.
-         */
-        void operator() (int i, const std::set<int>& ov, int rank)
-        {
-            if(rank==myrank)
-            {
-                global2local.push_back(count);
-                indexset->add(i, Index(count++, AttributeSet::owner, true));
-                neighbors.insert(ov.begin(), ov.end());
-            }
-            else
-            {
-                std::set<int>::const_iterator iter=
-                    ov.find(myrank);
-                if(iter!=ov.end())
-                {
-                    global2local.push_back(count);
-                    indexset->add(i, Index(count++, AttributeSet::copy, true));
-                    neighbors.insert(ov.begin(), iter);
-                    neighbors.insert(++iter, ov.end());
-                }
-                else
-                    global2local.push_back(std::numeric_limits<int>::max());
-            }
-        }
+	int myrank;
+	int count;
+	typedef std::set<int>::const_iterator NeighborIterator;
+	std::set<int> neighbors;
+	typedef Dune::ParallelLocalIndex<AttributeSet> Index;
+	ParallelIndexSet* indexset;
+	/**
+	 * @brief Adds an index with flag owner to the index set.
+	 *
+	 * An index is added if the rank is our rank.
+	 * @param i The global index
+	 * @param owner Does myrank own this index.
+	 */
+	void operator() (int i, bool owner)
+	{
+	    if(owner)
+	    {
+		indexset->add(i, Index(count++, AttributeSet::owner, true));
+	    }
+	}
+	/**
+	 * @brief Adds an index that is present on more than one processor to the index set.
+	 * @param i The global index.
+	 * @param ov The set of ranks where the index is in the overlap
+	 * region.
+	 * @param owner Does myrank own this index.
+	 */
+	void operator() (int i, const std::set<int>& ov, bool owner)
+	{
+	    if(owner)
+	    {
+		indexset->add(i, Index(count++, AttributeSet::owner, true));
+		neighbors.insert(ov.begin(), ov.end());
+	    }
+	    else
+	    {
+		std::set<int>::const_iterator iter=
+		    ov.find(myrank);
+		if(iter!=ov.end())
+		{
+		    indexset->add(i, Index(count++, AttributeSet::copy, true));
+		    neighbors.insert(ov.begin(), iter);
+		    neighbors.insert(++iter, ov.end());
+		}
+	    }
+	}
     } cell_counter;
     cell_counter.myrank=my_rank;
     cell_counter.count=0;
-    cell_counter.global2local.reserve(cell_part.size());
     cell_counter.indexset=&cell_indexset_;
+
     // set up the index set.
     cell_counter.indexset->beginResize();
-    typedef std::vector<std::set<int> >::const_iterator OIterator;
-    std::vector<int>::const_iterator ci=cell_part.begin();
-    for(OIterator end=overlap.end(), begin=overlap.begin(), i=begin; i!=end; ++i, ++ci)
-    {
-        if(i->size())
-            // Cell is shared between different processors
-            cell_counter(i-begin, *i, *ci);
-        else
-            // cell is not shared
-            cell_counter(i-begin, *ci);
+
+    for (unsigned lid = 0; lid < l2g.size(); ++lid) {
+	int gid = l2g[lid];
+	auto nabHelp = overlap[gid];
+	bool owner = pType[gid] == 2;
+	if(nabHelp.size()) {
+	    // Cell is shared between different processors
+	    cell_counter(gid, nabHelp, owner);
+	}
+	else
+	    // cell is not shared
+	    cell_counter(gid, owner);
     }
+    
     cell_counter.indexset->endResize();
+    
     // setup the remote indices.
-    typedef RemoteIndexListModifier<RemoteIndices::ParallelIndexSet, RemoteIndices::Allocator,
-                                    false> Modifier;
+    typedef RemoteIndexListModifier<RemoteIndices::ParallelIndexSet, RemoteIndices::Allocator,false> Modifier;
     typedef RemoteIndices::RemoteIndex RemoteIndex;
     cell_remote_indices_.setIndexSets(cell_indexset_, cell_indexset_, ccobj_);
-
+    //cell_remote_indices_.rebuild<true>();
 
     // Create a map of ListModifiers
     if(cell_counter.neighbors.size()){ //extra scope to call destructor of the Modifiers
-        std::map<int,Modifier> modifiers;
-        for(CellCounter::NeighborIterator n=cell_counter.neighbors.begin(), end=cell_counter.neighbors.end();
-            n != end; ++n)
-            modifiers.insert(std::make_pair(*n, cell_remote_indices_.getModifier<false,false>(*n)));
-        // Insert remote indices. For each entry in the index set, see wether there are overlap occurences and add them.
-        for(ParallelIndexSet::const_iterator i=cell_indexset_.begin(), end=cell_indexset_.end();
-            i!=end; ++i)
-        {
-            if(i->local().attribute()!=AttributeSet::owner)
-            {
-                std::map<int,Modifier>::iterator mod=modifiers.find(cell_part[i->global()]);
-                assert(mod!=modifiers.end());
-                mod->second.insert(RemoteIndex(AttributeSet::owner,&(*i)));
-            }
-            else
-            {
-                typedef std::set<int>::const_iterator SIter;
-                SIter mine =overlap[i->global()].find(my_rank);
-                for(SIter iter=overlap[i->global()].begin(); iter!=mine; ++iter)
-                {
-                    std::map<int,Modifier>::iterator mod=modifiers.find(*iter);
-                    assert(mod!=modifiers.end());
-                    mod->second.insert(RemoteIndex(AttributeSet::copy, &(*i)));
-                }
-                SIter end2=overlap[i->global()].end();
-                if(mine!=end2)
-                    for(++mine; mine!=end2; ++mine)
-                    {
-                        std::map<int,Modifier>::iterator mod=modifiers.find(*mine);
-                        assert(mod!=modifiers.end());
-                        mod->second.insert(RemoteIndex(AttributeSet::copy, &(*i)));
-                    }
-            }
-        }
+	std::map<int,Modifier> modifiers;
+	for(CellCounter::NeighborIterator n=cell_counter.neighbors.begin(), end=cell_counter.neighbors.end();
+	    n != end; ++n)
+	    modifiers.insert(std::make_pair(*n, cell_remote_indices_.getModifier<false,false>(*n)));
+	// Insert remote indices. For each entry in the index set, see wether there are overlap occurences and add them.
+	for(ParallelIndexSet::const_iterator i=cell_indexset_.begin(), end=cell_indexset_.end();
+	    i!=end; ++i)
+	{
+	    if(i->local().attribute()!=AttributeSet::owner)
+	    {
+		std::map<int,Modifier>::iterator mod=modifiers.find(cell_part[i->global()]);
+		assert(mod!=modifiers.end());
+		mod->second.insert(RemoteIndex(AttributeSet::owner,&(*i)));
+	    }
+	    else
+	    {
+		typedef std::set<int>::const_iterator SIter;
+		SIter mine =overlap[i->global()].find(my_rank);
+		for(SIter iter=overlap[i->global()].begin(); iter!=mine; ++iter)
+		{
+		    std::map<int,Modifier>::iterator mod=modifiers.find(*iter);
+		    assert(mod!=modifiers.end());
+		    mod->second.insert(RemoteIndex(AttributeSet::copy, &(*i)));
+		}
+		SIter end2=overlap[i->global()].end();
+		if(mine!=end2)
+		    for(++mine; mine!=end2; ++mine)
+		    {
+			std::map<int,Modifier>::iterator mod=modifiers.find(*mine);
+			assert(mod!=modifiers.end());
+			mod->second.insert(RemoteIndex(AttributeSet::copy, &(*i)));
+		    }
+	    }
+	}
     }
     else
     {
-        // Force update of the sync counter in the remote indices.
-        cell_remote_indices_.getModifier<false,false>(0);
+	// Force update of the sync counter in the remote indices.
+	cell_remote_indices_.getModifier<false,false>(0);
     }
 
     // We can identify existing cells with the help of the index set.
@@ -665,33 +667,32 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     // if they are reachable from an existing cell.
     // We use std::numeric_limits<int>::max() to indicate non-existent entities.
     std::vector<int> face_indicator(view_data.geometry_.geomVector<1>().size(),
-                                    std::numeric_limits<int>::max());
+				    std::numeric_limits<int>::max());
     std::vector<int> point_indicator(view_data.geometry_.geomVector<3>().size(),
-                                     std::numeric_limits<int>::max());
-    for(ParallelIndexSet::iterator i=cell_indexset_.begin(), end=cell_indexset_.end();
-            i!=end; ++i)
+					 std::numeric_limits<int>::max());
+    //for(ParallelIndexSet::iterator i=cell_indexset_.begin(), end=cell_indexset_.end();i!=end; ++i)
+    for (unsigned lid = 0; lid < l2g.size(); ++lid) 
     {
-        typedef boost::iterator_range<const EntityRep<1>*>::iterator RowIter;
-        int row_index=i->global();
-        // Somehow g++-4.4 does not find functions of father even if we
-        // change inheritance of OrientedEntityTable to public.
-        // Therfore we use an ugly cast to base class here.
-        const Opm::SparseTable<EntityRep<1> >& c2f=view_data.cell_to_face_;
-        for(RowIter f=c2f[row_index].begin(), fend=c2f[row_index].end();
-            f!=fend; ++f)
-        {
-            int findex=f->index();
-            --face_indicator[findex];
-            // points reachable from a cell exist, too.
-            for(auto p=view_data.face_to_point_[findex].begin(),
-                    pend=view_data.face_to_point_[findex].end(); p!=pend; ++p)
-            {
-                assert(*p >= 0);
-                --point_indicator[*p];
-            }
-        }
+	typedef boost::iterator_range<const EntityRep<1>*>::iterator RowIter;
+	int row_index=l2g[lid];
+	// Somehow g++-4.4 does not find functions of father even if we
+	// change inheritance of OrientedEntityTable to public.
+	// Therfore we use an ugly cast to base class here.
+	const Opm::SparseTable<EntityRep<1> >& c2f=view_data.cell_to_face_;
+	for(RowIter f=c2f[row_index].begin(), fend=c2f[row_index].end();
+	    f!=fend; ++f)
+	{
+	    int findex=f->index();
+	    --face_indicator[findex];
+	    // points reachable from a cell exist, too.
+	    for(auto p=view_data.face_to_point_[findex].begin(),
+		    pend=view_data.face_to_point_[findex].end(); p!=pend; ++p)
+	    {
+		assert(*p >= 0);
+		--point_indicator[*p];
+	    }
+	}
     }
-
 
     // renumber  face and point indicators
     std::for_each(face_indicator.begin(), face_indicator.end(), AssignAndIncrement());
@@ -699,15 +700,15 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
 
     std::vector<int> map2GlobalFaceId;
     int noExistingFaces = setupAndCountGlobalIds<1>(face_indicator, map2GlobalFaceId,
-                                                    *view_data.local_id_set_);
+							*view_data.local_id_set_);
     std::vector<int> map2GlobalPointId;
     int noExistingPoints = setupAndCountGlobalIds<3>(point_indicator, map2GlobalPointId,
-                                                     *view_data.local_id_set_);
+						     *view_data.local_id_set_);
     std::vector<int> map2GlobalCellId(cell_indexset_.size());
-    for(ParallelIndexSet::const_iterator i=cell_indexset_.begin(), end=cell_indexset_.end();
-        i!=end; ++i)
+    //for(ParallelIndexSet::const_iterator i=cell_indexset_.begin(), end=cell_indexset_.end();i!=end; ++i)
+    for (unsigned lid = 0; lid < l2g.size(); ++lid) 
     {
-        map2GlobalCellId[i->local()]=view_data.local_id_set_->id(EntityRep<0>(i->global(), true));
+	map2GlobalCellId[lid]=view_data.local_id_set_->id(EntityRep<0>(l2g[lid], true));
     }
 
     global_id_set_->swap(map2GlobalCellId, map2GlobalFaceId, map2GlobalPointId);
@@ -718,10 +719,12 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     global_cell_.resize(cell_indexset_.size());
 
     // Copy the existing cells.
-    for(auto i=cell_indexset_.begin(), end=cell_indexset_.end(); i!=end; ++i)
+    //for(auto i=cell_indexset_.begin(), end=cell_indexset_.end(); i!=end; ++i)
+    for (unsigned lid = 0; lid < l2g.size(); ++lid) 
     {
-        tmp_cell_geom[i->local()]=static_cast<std::vector<cpgrid::Geometry<3, 3> >&>(global_cell_geom)[i->global()];
-        global_cell_[i->local()]=view_data.global_cell_[i->global()];
+	int gid = l2g[lid];
+	tmp_cell_geom[lid]=static_cast<std::vector<cpgrid::Geometry<3, 3> >&>(global_cell_geom)[gid];
+	global_cell_[lid]=view_data.global_cell_[gid];
     }
     static_cast<std::vector<cpgrid::Geometry<3, 3> >&>(cell_geom).swap(tmp_cell_geom);
 
@@ -739,15 +742,15 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     auto ft = tmp_face_tag.begin();
     auto fn = tmp_face_normals.begin();
     for(auto begin=face_indicator.begin(), fi=begin,  end=face_indicator.end(); fi!=end;
-        ++fi)
+	++fi)
     {
-        if(*fi<std::numeric_limits<int>::max())
-        {
-            *fg=global_face_geom[fi-begin];
-            *ft=global_face_tag[fi-begin];
-            *fn=global_face_normals[fi-begin];
-            ++fg; ++ft; ++fn;
-        }
+	if(*fi<std::numeric_limits<int>::max())
+	{
+	    *fg=global_face_geom[fi-begin];
+	    *ft=global_face_tag[fi-begin];
+	    *fn=global_face_normals[fi-begin];
+	    ++fg; ++ft; ++fn;
+	}
     }
     static_cast<std::vector<PointType>&>(face_normals_).swap(tmp_face_normals);
     static_cast<std::vector<cpgrid::Geometry<2, 3> >&>(face_geom).swap(tmp_face_geom);
@@ -761,29 +764,29 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     // Now copy the point geometries that do exist.
     auto pt = tmp_point_geom.begin();
     for(auto begin=point_indicator.begin(), pi=begin,  end=point_indicator.end(); pi!=end;
-        ++pi)
+	++pi)
     {
-        if(*pi<std::numeric_limits<int>::max())
-        {
-            *pt=global_point_geom[pi-begin];
-            ++pt;
-        }
+	if(*pi<std::numeric_limits<int>::max())
+	{
+	    *pt=global_point_geom[pi-begin];
+	    ++pt;
+	}
     }
     // swap the underlying vectors to get data into point_geom
     static_cast<std::vector<cpgrid::Geometry<0, 3> >&>(point_geom).swap(tmp_point_geom);
 
     // Copy the vectors to geometry. There is no other way currently.
     geometry_=cpgrid::DefaultGeometryPolicy(cell_geom, face_geom,
-                                            point_geom);
+					    point_geom);
 
     // Create the topology information. This is stored in sparse matrix like data structures.
     // First conunt the size of the nonzeros of the cell_to_face data.
     int data_size=0;
-    for(auto i=cell_indexset_.begin(), end=cell_indexset_.end();
-        i!=end; ++i)
+    //for(auto i=cell_indexset_.begin(), end=cell_indexset_.end();i!=end; ++i)
+    for (unsigned lid = 0; lid < l2g.size(); ++lid) 
     {
-        const Opm::SparseTable<EntityRep<1> >& c2f=view_data.cell_to_face_;
-        data_size+=c2f.rowSize(i->global());
+	const Opm::SparseTable<EntityRep<1> >& c2f=view_data.cell_to_face_;
+	data_size+=c2f.rowSize(l2g[lid]);
     }
 
     //- cell_to_face_ : extract owner/overlap rows from cell_to_face_
@@ -791,22 +794,21 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     //OrientedEntityTable<0, 1> cell_to_face;
     cell_to_face_.reserve(cell_indexset_.size(), data_size);
     cell_to_point_.resize(cell_indexset_.size());
-
-    for(auto i=cell_indexset_.begin(), end=cell_indexset_.end();
-        i!=end; ++i)
-    {
-        typedef boost::iterator_range<const EntityRep<1>*>::const_iterator RowIter;
-        const Opm::SparseTable<EntityRep<1> >& c2f=view_data.cell_to_face_;
-        auto row=c2f[i->global()];
-        // create the new row, i.e. copy orientation and use new face indicator.
-        std::vector<EntityRep<1> > new_row(row.size());
-        std::vector<EntityRep<1> >::iterator  nface=new_row.begin();
-        for(RowIter face=row.begin(), fend=row.end(); face!=fend; ++face, ++nface)
-            nface->setValue(face_indicator[face->index()], face->orientation());
-        // Append the new row to the matrix
-        cell_to_face_.appendRow(new_row.begin(), new_row.end());
-        for(int j=0; j<8; ++j)
-            cell_to_point_[i->local()][j]=point_indicator[view_data.cell_to_point_[i->global()][j]];
+    
+    for (unsigned lid = 0; lid < l2g.size(); ++lid) {
+	int gid = l2g[lid];
+	typedef boost::iterator_range<const EntityRep<1>*>::const_iterator RowIter;
+	const Opm::SparseTable<EntityRep<1> >& c2f=view_data.cell_to_face_;
+	auto row=c2f[gid];
+	// create the new row, i.e. copy orientation and use new face indicator.
+	std::vector<EntityRep<1> > new_row(row.size());
+	std::vector<EntityRep<1> >::iterator  nface=new_row.begin();
+	for(RowIter face=row.begin(), fend=row.end(); face!=fend; ++face, ++nface)
+	    nface->setValue(face_indicator[face->index()], face->orientation());
+	// Append the new row to the matrix
+	cell_to_face_.appendRow(new_row.begin(), new_row.end());
+	for(int j=0; j<8; ++j)
+	    cell_to_point_[lid][j] = point_indicator[view_data.cell_to_point_[gid][j]];
     }
 
     // Calculate the number of nonzeros needed for the face_to_cell sparse matrix
@@ -814,66 +816,68 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     data_size=0;
     const Opm::SparseTable<EntityRep<0> >& f2c=view_data.face_to_cell_;
     for(auto f=face_indicator.begin(), fend=face_indicator.end(); f!=fend; ++f)
-        if(*f<std::numeric_limits<int>::max())
-            data_size += f2c.rowSize(*f);
+	if(*f<std::numeric_limits<int>::max())
+	    data_size += f2c.rowSize(*f);
 
     face_to_cell_.reserve(f2c.size(), data_size);
 
     //- face_to cell_ : extract rows that connect to an existent cell
     std::vector<int> cell_indicator(view_data.cell_to_face_.size(),
                                     std::numeric_limits<int>::max());
-    for(auto i=cell_indexset_.begin(), end=cell_indexset_.end(); i!=end; ++i)
-        cell_indicator[i->global()]=i->local();
+    //for(auto i=cell_indexset_.begin(), end=cell_indexset_.end(); i!=end; ++i) {
+    for (unsigned lid = 0; lid < l2g.size(); ++lid) {
+	cell_indicator[l2g[lid]] = lid;
+    }
 
     for(auto begin=face_indicator.begin(), f=begin, fend=face_indicator.end(); f!=fend; ++f)
     {
-        if(*f<std::numeric_limits<int>::max())
-        {
-            // face does exist
-            std::vector<EntityRep<0> > new_row;
-            auto old_row = f2c[f-begin];
-            new_row.reserve(old_row.size());
-            // push back connected existent cells.
-            // for those cells we use the new cell_indicator and copy the
-            // orientation of the old cell.
-            for(auto cell = old_row.begin(), cend=old_row.end();cell!=cend; ++cell)
-            {
-                // The statement below results in all faces having two neighbours
-                // except for those at the domain boundary.
-                // Note that along the front partition there are invalid neighbours
-                // marked with index std::numeric_limits<int>::max()
-                // Still they inherit the orientation to make CpGrid::faceCell happy
-                new_row.push_back(EntityRep<0>(cell_indicator[cell->index()],
-                                                   cell->orientation()));
-            }
-            face_to_cell_.appendRow(new_row.begin(), new_row.end());
-        }
+	if(*f<std::numeric_limits<int>::max())
+	{
+	    // face does exist
+	    std::vector<EntityRep<0> > new_row;
+	    auto old_row = f2c[f-begin];
+	    new_row.reserve(old_row.size());
+	    // push back connected existent cells.
+	    // for those cells we use the new cell_indicator and copy the
+	    // orientation of the old cell.
+	    for(auto cell = old_row.begin(), cend=old_row.end();cell!=cend; ++cell)
+	    {
+		// The statement below results in all faces having two neighbours
+		// except for those at the domain boundary.
+		// Note that along the front partition there are invalid neighbours
+		// marked with index std::numeric_limits<int>::max()
+		// Still they inherit the orientation to make CpGrid::faceCell happy
+		new_row.push_back(EntityRep<0>(cell_indicator[cell->index()],
+					       cell->orientation()));
+	    }
+	    face_to_cell_.appendRow(new_row.begin(), new_row.end());
+	}
     }
 
     // Compute the number of non zeros of the face_to_point matrix.
     data_size=0;
     for(auto f=face_indicator.begin(), fend=face_indicator.end(); f!=fend; ++f)
-        if(*f<std::numeric_limits<int>::max())
-            data_size += view_data.face_to_point_.rowSize(*f);
+	if(*f<std::numeric_limits<int>::max())
+	    data_size += view_data.face_to_point_.rowSize(*f);
 
     face_to_point_.reserve(view_data.face_to_point_.size(), data_size);
 
     //- face_to_point__ : extract row associated with existing faces_
     for(auto begin=face_indicator.begin(), f=begin, fend=face_indicator.end(); f!=fend; ++f)
     {
-        if(*f<std::numeric_limits<int>::max())
-        {
-            // face does exist
-            std::vector<int> new_row;
-            auto old_row = view_data.face_to_point_[f-begin];
-            new_row.reserve(old_row.size());
-            for(auto point = old_row.begin(), pend=old_row.end(); point!=pend; ++point)
-            {
-                assert(point_indicator[*point]<std::numeric_limits<int>::max());
-                new_row.push_back(point_indicator[*point]);
-            }
-            face_to_point_.appendRow(new_row.begin(), new_row.end());
-        }
+	if(*f<std::numeric_limits<int>::max())
+	{
+	    // face does exist
+	    std::vector<int> new_row;
+	    auto old_row = view_data.face_to_point_[f-begin];
+	    new_row.reserve(old_row.size());
+	    for(auto point = old_row.begin(), pend=old_row.end(); point!=pend; ++point)
+	    {
+		assert(point_indicator[*point]<std::numeric_limits<int>::max());
+		new_row.push_back(point_indicator[*point]);
+	    }
+	    face_to_point_.appendRow(new_row.begin(), new_row.end());
+	}
     }
 
     logical_cartesian_size_=view_data.logical_cartesian_size_;
@@ -881,25 +885,27 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     // - unique_boundary_ids_ : extract the ones that correspond existent faces
     if(view_data.unique_boundary_ids_.size())
     {
-        // Unique boundary ids are inherited from the global grid.
-        auto id=view_data.unique_boundary_ids_.begin();
-        unique_boundary_ids_.reserve(view_data.face_to_cell_.size());
-        for(auto f=face_indicator.begin(), fend=face_indicator.end(); f!=fend; ++f, ++id)
-        {
-            if(*f<std::numeric_limits<int>::max())
-            {
-                unique_boundary_ids_.push_back(*id);
-            }
-        }
+	// Unique boundary ids are inherited from the global grid.
+	auto id=view_data.unique_boundary_ids_.begin();
+	unique_boundary_ids_.reserve(view_data.face_to_cell_.size());
+	for(auto f=face_indicator.begin(), fend=face_indicator.end(); f!=fend; ++f, ++id)
+	{
+	    if(*f<std::numeric_limits<int>::max())
+	    {
+		unique_boundary_ids_.push_back(*id);
+	    }
+	}
     }
     // Compute the partition type for cell
     partition_type_indicator_->cell_indicator_.resize(cell_indexset_.size());
-    for(ParallelIndexSet::const_iterator i=cell_indexset_.begin(), end=cell_indexset_.end();
-            i!=end; ++i)
+    //for(ParallelIndexSet::const_iterator i=cell_indexset_.begin(), end=cell_indexset_.end();i!=end; ++i)
+    for (unsigned lid = 0; lid < l2g.size(); ++lid) 
     {
-        partition_type_indicator_->cell_indicator_[i->local()]=
-            i->local().attribute()==AttributeSet::owner?
-            InteriorEntity:OverlapEntity;
+	partition_type_indicator_->cell_indicator_[lid] = pType[l2g[lid]]==2?
+	    InteriorEntity:OverlapEntity;
+	//partition_type_indicator_->cell_indicator_[i->local()]=
+	//i->local().attribute()==AttributeSet::owner?
+	//InteriorEntity:OverlapEntity;
     }
 
     // Compute partition type for points
@@ -908,38 +914,38 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     // we set the type of the point to the one of the face as long as the type of the point is
     // not border.
     partition_type_indicator_->point_indicator_.resize(geometry_.geomVector<3>().size(),
-                                                       OverlapEntity);
+						       OverlapEntity);
     for(int i=0; i<face_to_point_.size(); ++i)
     {
-        for(auto p=face_to_point_[i].begin(),
-                pend=face_to_point_[i].end(); p!=pend; ++p)
-        {
-            PartitionType new_type=partition_type_indicator_->getFacePartitionType(i);
-            PartitionType old_type=PartitionType(partition_type_indicator_->point_indicator_[*p]);
-            if(old_type==InteriorEntity)
-            {
-                if(new_type!=OverlapEntity)
-                    partition_type_indicator_->point_indicator_[*p]=new_type;
-            }
-            if(old_type==OverlapEntity)
-                partition_type_indicator_->point_indicator_[*p]=new_type;
-            if(old_type==FrontEntity && new_type==BorderEntity)
-                partition_type_indicator_->point_indicator_[*p]=new_type;
-        }
+	for(auto p=face_to_point_[i].begin(),
+		pend=face_to_point_[i].end(); p!=pend; ++p)
+	{
+	    PartitionType new_type=partition_type_indicator_->getFacePartitionType(i);
+	    PartitionType old_type=PartitionType(partition_type_indicator_->point_indicator_[*p]);
+	    if(old_type==InteriorEntity)
+	    {
+		if(new_type!=OverlapEntity)
+		    partition_type_indicator_->point_indicator_[*p]=new_type;
+	    }
+	    if(old_type==OverlapEntity)
+		partition_type_indicator_->point_indicator_[*p]=new_type;
+	    if(old_type==FrontEntity && new_type==BorderEntity)
+		partition_type_indicator_->point_indicator_[*p]=new_type;
+	}
     }
 
     // Compute the interface information for cells
     std::get<InteriorBorder_All_Interface>(cell_interfaces_)
-        .build(cell_remote_indices_, EnumItem<AttributeSet, AttributeSet::owner>(),
-               AllSet<AttributeSet>());
+	.build(cell_remote_indices_, EnumItem<AttributeSet, AttributeSet::owner>(),
+	       AllSet<AttributeSet>());
     std::get<Overlap_OverlapFront_Interface>(cell_interfaces_)
-        .build(cell_remote_indices_, EnumItem<AttributeSet, AttributeSet::copy>(),
-               EnumItem<AttributeSet, AttributeSet::copy>());
+	.build(cell_remote_indices_, EnumItem<AttributeSet, AttributeSet::copy>(),
+	       EnumItem<AttributeSet, AttributeSet::copy>());
     std::get<Overlap_All_Interface>(cell_interfaces_)
-        .build(cell_remote_indices_, EnumItem<AttributeSet, AttributeSet::copy>(),
-                                 AllSet<AttributeSet>());
+	.build(cell_remote_indices_, EnumItem<AttributeSet, AttributeSet::copy>(),
+	       AllSet<AttributeSet>());
     std::get<All_All_Interface>(cell_interfaces_)
-        .build(cell_remote_indices_, AllSet<AttributeSet>(), AllSet<AttributeSet>());
+	.build(cell_remote_indices_, AllSet<AttributeSet>(), AllSet<AttributeSet>());
 
     // Now we use the all_all communication of the cells to compute which faces and points
     // are also present on other processes and with what attribute.
@@ -954,40 +960,40 @@ void CpGridData::distributeGlobalGrid(const CpGrid& grid,
     std::size_t max_entries = 0;
     for (const auto& pair: all_all_cell_interface.interfaces() )
     {
-        using std::max;
-        max_entries = max(max_entries, pair.second.first.size());
-        max_entries = max(max_entries, pair.second.second.size());
+	using std::max;
+	max_entries = max(max_entries, pair.second.first.size());
+	max_entries = max(max_entries, pair.second.second.size());
     }
     Dune::VariableSizeCommunicator<> comm(all_all_cell_interface.communicator(),
-                                          all_all_cell_interface.interfaces(),
-                                          max_entries*8*sizeof(int));
+					      all_all_cell_interface.interfaces(),
+					      max_entries*8*sizeof(int));
     /*
-      // code deactivated, because users cannot access face indices and therefore
-      // communication on faces makes no sense!
+    // code deactivated, because users cannot access face indices and therefore
+    // communication on faces makes no sense!
     std::vector<std::map<int,char> > face_attributes(noExistingFaces);
     AttributeDataHandle<Opm::SparseTable<EntityRep<1> > >
-        face_handle(ccobj_.rank(), *partition_type_indicator_,
-                    face_attributes, static_cast<Opm::SparseTable<EntityRep<1> >&>(cell_to_face_),
-                    *this);
+    face_handle(ccobj_.rank(), *partition_type_indicator_,
+    face_attributes, static_cast<Opm::SparseTable<EntityRep<1> >&>(cell_to_face_),
+    *this);
     if( std::get<All_All_Interface>(cell_interfaces_).interfaces().size() )
     {
-        comm.forward(face_handle);
+    comm.forward(face_handle);
     }
     createInterfaces(face_attributes, FacePartitionTypeIterator(partition_type_indicator_),
-                     face_interfaces_);
+    face_interfaces_);
     std::vector<std::map<int,char> >().swap(face_attributes);
     */
     std::vector<std::map<int,char> > point_attributes(noExistingPoints);
     AttributeDataHandle<std::vector<std::array<int,8> > >
-        point_handle(ccobj_.rank(), *partition_type_indicator_,
-                     point_attributes, cell_to_point_, *this);
+	point_handle(ccobj_.rank(), *partition_type_indicator_,
+		     point_attributes, cell_to_point_, *this);
     if( static_cast<const Dune::Interface&>(std::get<All_All_Interface>(cell_interfaces_))
-        .interfaces().size() )
+	.interfaces().size() )
     {
-        comm.forward(point_handle);
+	comm.forward(point_handle);
     }
     createInterfaces(point_attributes, partition_type_indicator_->point_indicator_.begin(),
-                     point_interfaces_);
+		     point_interfaces_);
 #else // #if HAVE_MPI
     static_cast<void>(grid);
     static_cast<void>(view_data);

@@ -82,6 +82,13 @@ namespace Dune
                           std::vector<std::set<int> >& cell_overlap,
                           int mypart, int overlapLayers, bool all=false);
 
+
+    void findInteriorAndOverlapCells(std::vector<std::set<int>>& overlap, const std::vector<int>& cell_part, int my_rank,
+				     std::vector<int>& naturalOrder, std::vector<int>& partitionType);
+
+    std::vector<int> reorderLocalCells(const CpGrid& grid, const std::vector<int>& naturalOrder, const std::vector<int>& pType,
+				       int reorderMethod);
+
 } // namespace Dune
 
 
