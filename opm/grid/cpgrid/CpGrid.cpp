@@ -152,14 +152,14 @@ CpGrid::scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
         distributed_data_->distributeGlobalGrid(*this,*this->current_view_data_, cell_part,
                                                 overlapLayers, reorderLocal, transmissibilities);
         int num_cells = distributed_data_->cell_to_face_.size();
-        std::ostringstream message;
+        /*std::ostringstream message;
         message << "After loadbalancing process " << my_num << " has " << num_cells << " cells.";
         if (num_cells == 0) {
             throw std::runtime_error(message.str() + " Aborting.");
         } else {
             std::cout << message.str() << "\n";
         }
-
+	*/
         // add an interface for gathering/scattering data with communication
         // forward direction will be scatter and backward gather
         cell_scatter_gather_interfaces_.reset(new InterfaceMap);
@@ -298,14 +298,14 @@ CpGrid::scatterCellPartition(std::vector<int>& cell_part, const std::vector<cons
         distributed_data_->distributeGlobalGrid(*this,*this->current_view_data_, cell_part,
                                                 overlapLayers, 1, nullptr);
         int num_cells = distributed_data_->cell_to_face_.size();
-        std::ostringstream message;
+        /*std::ostringstream message;
         message << "After loadbalancing process " << my_num << " has " << num_cells << " cells.";
         if (num_cells == 0) {
             throw std::runtime_error(message.str() + " Aborting.");
         } else {
             std::cout << message.str() << "\n";
         }
-
+	*/
         // add an interface for gathering/scattering data with communication
         // forward direction will be scatter and backward gather
         cell_scatter_gather_interfaces_.reset(new InterfaceMap);
