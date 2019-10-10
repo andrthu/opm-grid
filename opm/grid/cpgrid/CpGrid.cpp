@@ -220,6 +220,7 @@ CpGrid::scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
 					      const double* transmissibilities,
 					      int overlapLayers, int edgeWeightsMethod)
 {
+#if HAVE_MPI
     CollectiveCommunication cc(MPI_COMM_WORLD);
 
     int my_num=cc.rank();
@@ -232,12 +233,17 @@ CpGrid::scatterGrid(const std::vector<const cpgrid::OpmWellType *> * wells,
     auto cell_part = std::get<0>(part_and_wells);
 
     return cell_part;
+#else
+    std::vector<int> cell_part(numCells(), 0);
+    return cell_part;
+#endif
 }
 
 std::pair<bool, std::unordered_set<std::string> >
 CpGrid::scatterCellPartition(std::vector<int>& cell_part, const std::vector<const cpgrid::OpmWellType *> * wells,
 			     int overlapLayers)
 {
+#if HAVE_MPI
     static_cast<void>(wells);
     static_cast<void>(overlapLayers);
     
@@ -353,6 +359,13 @@ CpGrid::scatterCellPartition(std::vector<int>& cell_part, const std::vector<cons
     }
     current_view_data_ = distributed_data_.get();
     return std::make_pair(true, defunct_wells);
+    
+#else // #if HAVE_MPI
+    std::cerr << "CpGrid::scatterGrid() is non-trivial only with "
+              << "MPI support and if the target Dune platform is "
+              << "sufficiently recent.\n";
+    return std::make_pair(false, std::unordered_set<std::string>());
+#endif
 }
     
     void CpGrid::createCartesian(const std::array<int, 3>& dims,
