@@ -116,11 +116,13 @@ namespace cpgrid
     void CpGridData::processEclipseFormat(const Opm::EclipseGrid& ecl_grid, bool periodic_extension, bool turn_normals, bool clip_z,
                                           const std::vector<double>& poreVolume, const Opm::NNC& nncs)
     {
-        std::vector<double> coordData;
-        ecl_grid.exportCOORD(coordData);
+        if (ccobj_.rank() != 0 ) {
+            // Store global grid only on rank 0
+            return;
+        }
 
-        std::vector<int> actnumData;
-        ecl_grid.exportACTNUM(actnumData);
+        std::vector<double> coordData = ecl_grid.getCOORD();
+        std::vector<int> actnumData = ecl_grid.getACTNUM();
 
         // Mutable because grdecl::zcorn is non-const.
         auto zcornData = getSanitizedZCORN(ecl_grid, actnumData);
@@ -144,7 +146,7 @@ namespace cpgrid
             const size_t cartGridSize = g.dims[0] * g.dims[1] * g.dims[2];
             std::vector<double> thickness(cartGridSize);
             for (size_t i = 0; i < cartGridSize; ++i) {
-                thickness[i] = ecl_grid.getCellThicknes(i);
+                thickness[i] = ecl_grid.getCellThickness(i);
             }
             const double z_tolerance = ecl_grid.isPinchActive() ?  ecl_grid.getPinchThresholdThickness() : 0.0;
             nnc_cells_pinch = mp.process(thickness, z_tolerance, poreVolume, ecl_grid.getMinpvVector(), actnumData, opmfil, zcornData.data());
@@ -243,6 +245,12 @@ namespace cpgrid
     /// Read the Eclipse grid format ('.grdecl').
     void CpGridData::processEclipseFormat(const grdecl& input_data, const NNCMaps& nnc, double z_tolerance, bool remove_ij_boundary, bool turn_normals)
     {
+        if( ccobj_.rank() != 0 )
+        {
+            // We do not store any grid information
+            ccobj_.scatter(logical_cartesian_size_.data(), logical_cartesian_size_.data(), 3, 0);
+            return;
+        }
         // Process.
 #ifdef VERBOSE
         std::cout << "Processing eclipse data." << std::endl;
@@ -292,6 +300,10 @@ namespace cpgrid
 
         computeUniqueBoundaryIds();
 
+        if(ccobj_.size()>1)
+            populateGlobalCellIndexSet();
+        auto tmp = logical_cartesian_size_; // Probably not necessary?
+        ccobj_.scatter(tmp.data(), logical_cartesian_size_.data(), 3, 0);
 #ifdef VERBOSE
         std::cout << "Done with grid processing." << std::endl;
 #endif
@@ -313,8 +325,7 @@ namespace cpgrid
         getSanitizedZCORN(const ::Opm::EclipseGrid& ecl_grid,
                           const ::std::vector<int>& actnumData)
         {
-            std::vector<double> zcornData;
-            ecl_grid.exportZCORN(zcornData);
+            std::vector<double> zcornData = ecl_grid.getZCORN();
 
             auto repair = ::Opm::UgGridHelpers::RepairZCORN {
                 std::move(zcornData), actnumData,

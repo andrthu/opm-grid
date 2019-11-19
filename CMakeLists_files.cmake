@@ -32,6 +32,7 @@ list (APPEND MAIN_SOURCE_FILES
   opm/grid/cpgrid/Intersection.cpp
   opm/grid/cpgrid/CpGridData.cpp
   opm/grid/cpgrid/CpGrid.cpp
+  opm/grid/cpgrid/DataHandleWrappers.cpp
   opm/grid/cpgrid/GridHelpers.cpp
   opm/grid/cpgrid/PartitionTypeIndicator.cpp
   opm/grid/cpgrid/processEclipseFormat.cpp
@@ -84,6 +85,7 @@ list (APPEND ATTIC_FILES
 # find tests -name '*.cpp' -a ! -wholename '*/not-unit/*' -printf '\t%p\n' | sort
 list (APPEND TEST_SOURCE_FILES
   tests/test_cartgrid.cpp
+  tests/test_cpgrid.cpp
   tests/test_column_extract.cpp
   tests/cpgrid/distribution_test.cpp
   tests/cpgrid/entityrep_test.cpp
@@ -96,7 +98,7 @@ list (APPEND TEST_SOURCE_FILES
   tests/test_geom2d.cpp
   tests/test_gridutilities.cpp
   tests/test_minpvprocessor.cpp
-#	tests/grid_test.cc
+  tests/test_polyhedralgrid.cpp
   tests/p2pcommunicator_test.cc
   tests/test_repairzcorn.cpp
   tests/test_sparsetable.cpp
@@ -151,6 +153,7 @@ list (APPEND PUBLIC_HEADER_FILES
   opm/grid/common/p2pcommunicator_impl.hh
   opm/grid/cpgrid/CartesianIndexMapper.hpp
   opm/grid/cpgrid/CpGridData.hpp
+  opm/grid/cpgrid/DataHandleWrappers.hpp
   opm/grid/cpgrid/DefaultGeometryPolicy.hpp
   opm/grid/cpgrid/dgfparser.hh
   opm/grid/cpgrid/Entity2IndexDataHandle.hpp
@@ -215,6 +218,7 @@ list (APPEND PUBLIC_HEADER_FILES
   opm/grid/utility/RegionMapping.hpp
   opm/grid/utility/SparseTable.hpp
   opm/grid/utility/StopWatch.hpp
+  opm/grid/utility/VariableSizeCommunicator.hpp
   opm/grid/utility/VelocityInterpolation.hpp
   opm/grid/utility/WachspressCoord.hpp
   opm/grid/utility/ErrorMacros.hpp
