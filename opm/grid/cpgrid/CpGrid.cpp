@@ -137,9 +137,8 @@ std::vector<int> CpGrid::zoltanPartitionWithoutScatter(const std::vector<cpgrid:
     auto& cc = data_->ccobj_;
 #ifdef HAVE_ZOLTAN
     EdgeWeightMethod met = EdgeWeightMethod(1);
-    
+
     return cpgrid::zoltanGraphPartitionGridForJac(*this, wells, transmissibilities, cc, met, 0, numParts);
-    
 #endif
 #endif
     return cell_part;
