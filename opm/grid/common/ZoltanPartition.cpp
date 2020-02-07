@@ -52,6 +52,7 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     {
         OPM_THROW(std::runtime_error, "Could not initialize Zoltan!");
     }
+
     Zoltan_Set_Param(zz, "IMBALANCE_TOL", "1.1");
     Zoltan_Set_Param(zz, "DEBUG_LEVEL", "0");
     Zoltan_Set_Param(zz, "LB_METHOD", "GRAPH");
@@ -60,7 +61,7 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     Zoltan_Set_Param(zz, "NUM_LID_ENTRIES", "1");
     Zoltan_Set_Param(zz, "RETURN_LISTS", "ALL");
     Zoltan_Set_Param(zz, "CHECK_GRAPH", "2");
-    Zoltan_Set_Param(zz,"EDGE_WEIGHT_DIM","0");
+    Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM","0");
     Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "0");
     Zoltan_Set_Param(zz, "PHG_EDGE_SIZE_THRESHOLD", ".35");  /* 0-remove all, 1-remove none */
 
@@ -77,7 +78,7 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
                                                        wells,
                                                        transmissibilities,
                                                        partitionIsEmpty,
-						       edgeWeightsMethod));
+                                                       edgeWeightsMethod));
         Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, *grid_and_wells,
                                                     partitionIsEmpty);
     }
@@ -184,6 +185,102 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
 
     return std::make_tuple(parts, defunct_well_names, myExportList, myImportList);
 }
+
+std::vector<int>
+zoltanGraphPartitionGridForJac(const CpGrid& cpgrid,
+                               const std::vector<OpmWellType> * wells,
+                               const double* transmissibilities,
+                               const CollectiveCommunication<MPI_Comm>& cc,
+                               EdgeWeightMethod edgeWeightsMethod, int root,
+                               int numParts)
+{
+    int rc = ZOLTAN_OK - 1;
+    float ver = 0;
+    struct Zoltan_Struct *zz;
+    int changes, numGidEntries, numLidEntries, numImport, numExport;
+    ZOLTAN_ID_PTR importGlobalGids, importLocalGids, exportGlobalGids, exportLocalGids;
+    int *importProcs, *importToPart, *exportProcs, *exportToPart;
+    int argc=0;
+    char** argv = 0 ;
+    rc = Zoltan_Initialize(argc, argv, &ver);
+    zz = Zoltan_Create(cc);
+    if ( rc != ZOLTAN_OK )
+    {
+        OPM_THROW(std::runtime_error, "Could not initialize Zoltan!");
+    }
+
+    if (numParts > 0 ) {
+        std::string snp = std::to_string(numParts);
+        Zoltan_Set_Param(zz, "NUM_GLOBAL_PARTS", snp.data());
+        Zoltan_Set_Param(zz, "NUM_LOCAL_PARTS", snp.data());
+        Zoltan_Set_Param(zz, "RETURN_LISTS", "PARTS");
+    }
+    Zoltan_Set_Param(zz, "IMBALANCE_TOL", "1.1");
+    Zoltan_Set_Param(zz, "DEBUG_LEVEL", "2");
+    Zoltan_Set_Param(zz, "LB_METHOD", "GRAPH");
+    Zoltan_Set_Param(zz, "LB_APPROACH", "PARTITION");
+    Zoltan_Set_Param(zz, "NUM_GID_ENTRIES", "1");
+    Zoltan_Set_Param(zz, "NUM_LID_ENTRIES", "1");
+    Zoltan_Set_Param(zz, "CHECK_GRAPH", "2");
+    Zoltan_Set_Param(zz, "EDGE_WEIGHT_DIM","0");
+    Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "0");
+    Zoltan_Set_Param(zz, "PHG_EDGE_SIZE_THRESHOLD", ".35");  /* 0-remove all, 1-remove none */
+
+    // For the load balancer one process has the whole grid and
+    // all others an empty partition before loadbalancing.
+    bool partitionIsEmpty     = cc.rank()!=root;
+
+    std::shared_ptr<CombinedGridWellGraph> grid_and_wells;
+
+    if( wells )
+    {
+        Zoltan_Set_Param(zz,"EDGE_WEIGHT_DIM","1");
+        grid_and_wells.reset(new CombinedGridWellGraph(cpgrid,
+                                                       wells,
+                                                       transmissibilities,
+                                                       partitionIsEmpty,
+                                                       edgeWeightsMethod));
+        Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, *grid_and_wells,
+                                                    partitionIsEmpty);
+    }
+    else
+    {
+        Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, cpgrid, partitionIsEmpty);
+    }
+
+    rc = Zoltan_LB_Partition(zz, /* input (all remaining fields are output) */
+                             &changes,        /* 1 if partitioning was changed, 0 otherwise */
+                             &numGidEntries,  /* Number of integers used for a global ID */
+                             &numLidEntries,  /* Number of integers used for a local ID */
+                             &numImport,      /* Number of vertices to be sent to me */
+                             &importGlobalGids,  /* Global IDs of vertices to be sent to me */
+                             &importLocalGids,   /* Local IDs of vertices to be sent to me */
+                             &importProcs,    /* Process rank for source of each incoming vertex */
+                             &importToPart,   /* New partition for each incoming vertex */
+                             &numExport,      /* Number of vertices I must send to other processes*/
+                             &exportGlobalGids,  /* Global IDs of the vertices I must send */
+                             &exportLocalGids,   /* Local IDs of the vertices I must send */
+                             &exportProcs,    /* Process to which I send each of the vertices */
+                             &exportToPart);  /* Partition to which each vertex will belong */
+    int                         size = cpgrid.numCells();
+    int                         rank  = cc.rank();
+    std::vector<int>            parts(size, rank);
+    std::vector<std::vector<int> > wells_on_proc;
+    // List entry: process to export to, (global) index, attribute there (not needed?)
+
+    for ( int i=0; i < numExport; ++i )
+    {
+        parts[i] = exportToPart[i];
+    }
+
+    // free space allocated for zoltan.
+    Zoltan_LB_Free_Part(&exportGlobalGids, &exportLocalGids, &exportProcs, &exportToPart);
+    Zoltan_LB_Free_Part(&importGlobalGids, &importLocalGids, &importProcs, &importToPart);
+    Zoltan_Destroy(&zz);
+
+
+    return parts;
+}    
 }
 }
 #endif // HAVE_ZOLTAN
