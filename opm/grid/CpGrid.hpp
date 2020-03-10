@@ -153,31 +153,17 @@ namespace Dune
         template <PartitionIteratorType pitype>
         struct Partition
         {
-#if DUNE_VERSION_NEWER(DUNE_GRID, 2, 5)
             /// \brief The type of the level grid view associated with this partition type.
             typedef Dune::GridView<DefaultLevelGridViewTraits<CpGrid> > LevelGridView;
             /// \brief The type of the leaf grid view associated with this partition type.
             typedef Dune::GridView<DefaultLeafGridViewTraits<CpGrid> > LeafGridView;
-#else
-            /// \brief The type of the level grid view associated with this partition type.
-            typedef Dune::GridView<DefaultLevelGridViewTraits<CpGrid, pitype> > LevelGridView;
-            /// \brief The type of the leaf grid view associated with this partition type.
-            typedef Dune::GridView<DefaultLeafGridViewTraits<CpGrid, pitype> > LeafGridView;
-#endif
 
         };
 
-#if DUNE_VERSION_NEWER(DUNE_GRID, 2, 5)
         /// \brief The type of the level grid view associated with this partition type.
         typedef Dune::GridView<DefaultLevelGridViewTraits<CpGrid> > LevelGridView;
         /// \brief The type of the leaf grid view associated with this partition type.
         typedef Dune::GridView<DefaultLeafGridViewTraits<CpGrid> > LeafGridView;
-#else
-        /// \brief The type of the level grid view associated with this partition type.
-        typedef Dune::GridView<DefaultLevelGridViewTraits<CpGrid, Dune::All_Partition> > LevelGridView;
-        /// \brief The type of the leaf grid view associated with this partition type.
-        typedef Dune::GridView<DefaultLeafGridViewTraits<CpGrid, Dune::All_Partition> > LeafGridView;
-#endif
 
         /// \brief The type of the level index set.
         typedef cpgrid::IndexSet LevelIndexSet;
@@ -700,6 +686,33 @@ namespace Dune
             return ret;
         }
 
+        /// \brief Distributes this grid over the available nodes in a distributed machine
+        ///
+        /// This will construct the corresponding graph to the grid and use the transmissibilities
+        /// specified to calculate the  weights associated with its edges. The graph will be passed
+        ///  to the load balancer.
+        /// \param data A data handle describing how to distribute attached data.
+        /// \param method The edge-weighting method to be used on the Zoltan partitioner.
+        /// \param wells The information about all possible wells. If null then
+        ///            the wells will be neglected. Otherwise the wells will be
+        ///            used to make sure that all the possible completion cells
+        ///            of each well are stored on one process. This is done by
+        ///            adding an edge with a very high edge weight for all
+        ///            possible pairs of cells in the completion set of a well.
+        /// \param transmissibilities The transmissibilities used to calculate the edge weights.
+        /// \param The number of layers of cells of the overlap region (default: 1).
+        /// \warning May only be called once.
+        template<class DataHandle>
+        std::pair<bool, std::unordered_set<std::string> >
+        loadBalance(DataHandle& data, EdgeWeightMethod method,
+                    const std::vector<cpgrid::OpmWellType> * wells,
+                    const double* transmissibilities = nullptr,
+                    int overlapLayers=1)
+        {
+            auto ret = scatterGrid(method, wells, transmissibilities, overlapLayers);
+            scatterData(data);
+            return ret;
+        }
 
         /// \brief Distributes this grid and data over the available nodes in a distributed machine.
         /// \param data A data handle describing how to distribute attached data.
@@ -1399,15 +1412,6 @@ namespace Dune
         {
             static const bool v = true;
         };
-
-#if ! DUNE_VERSION_NEWER(DUNE_GRID, 2, 5)
-        /// \todo Please doc me !
-        template <>
-        struct isParallel<CpGrid>
-        {
-            static const bool v = true;
-        };
-#endif
 
         template<>
         struct canCommunicate<CpGrid,0>

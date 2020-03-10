@@ -51,13 +51,14 @@
 
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 
 namespace
 {
 
 #if HAVE_MPI
 
-using AttributeSet = Dune::OwnerOverlapCopyAttributeSet::AttributeSet;
+using AttributeSet = Dune::cpgrid::CpGridData::AttributeSet;
 
 template<typename Tuple, bool first>
 void reserveInterface(const std::vector<Tuple>& list, Dune::CpGrid::InterfaceMap& interface,
@@ -152,7 +153,6 @@ CpGrid::scatterGrid(EdgeWeightMethod method, const std::vector<cpgrid::OpmWellTy
 
     if (cc.size() > 1)
     {
-        int my_num=cc.rank();
 #ifdef HAVE_ZOLTAN
         auto part_and_wells =
             cpgrid::zoltanGraphPartitionGridOnRoot(*this, wells, transmissibilities, cc, method, 0);
@@ -246,13 +246,61 @@ CpGrid::scatterGrid(EdgeWeightMethod method, const std::vector<cpgrid::OpmWellTy
         setupRecvInterface(importList, *cell_scatter_gather_interfaces_);
 
         distributed_data_->distributeGlobalGrid(*this,*this->current_view_data_, cell_part);
-        int num_cells = distributed_data_->cell_to_face_.size();
-        std::ostringstream message;
-        message << "After loadbalancing process " << my_num << " has " << num_cells << " cells.";
-        if (num_cells == 0) {
-            throw std::runtime_error(message.str() + " Aborting.");
-        } else {
-            std::cout << message.str() << "\n";
+
+
+        // Compute the partition type for cell
+        int owned_cells = 0;
+        int overlap_cells = 0;
+        for (const auto i : distributed_data_->cell_indexset_) {
+            if (i.local().attribute() == AttributeSet::owner) {
+                ++owned_cells;
+            } else {
+                ++overlap_cells;
+            }
+        }
+
+        // owned cells
+        std::vector<int> cc_owned_cells(cc.size(), 0);
+        cc_owned_cells[cc.rank()] = owned_cells;
+        cc.sum(cc_owned_cells.data(), cc.size());
+
+        // overlap cells
+        std::vector<int> cc_overlap_cells(cc.size(), 0);
+        cc_overlap_cells[cc.rank()] = overlap_cells;
+        cc.sum(cc_overlap_cells.data(), cc.size());
+
+        // total cells
+        const int total_cells = distributed_data_->cell_to_face_.size();
+        std::vector<int> cc_total_cells(cc.size(), 0);
+        cc_total_cells[cc.rank()] = total_cells;
+        cc.sum(cc_total_cells.data(), cc.size());
+
+        if (cc.rank() == 0) {
+            std::ostringstream ostr;
+            ostr << "\nLoad balancing distributes " << data_->size(0)
+                << " active cells on " << cc.size() << " processes as follows:\n"; 
+            ostr << "  rank   owned cells   overlap cells   total cells\n";
+            ostr << "--------------------------------------------------\n";
+            for (int i = 0; i < cc.size(); ++i) {
+                ostr << std::setw(6) << i
+                    << std::setw(14) << cc_owned_cells[i]
+                    << std::setw(16) << cc_overlap_cells[i]
+                    << std::setw(14) << cc_total_cells[i] << "\n";
+            }
+            ostr << "--------------------------------------------------\n";
+            ostr << "   sum";
+            auto sum_owned = std::accumulate(cc_owned_cells.begin(), cc_owned_cells.end(), 0);
+            ostr << std::setw(14) << sum_owned;
+            auto sum_overlap = std::accumulate(cc_overlap_cells.begin(), cc_overlap_cells.end(), 0);
+            ostr << std::setw(16) << sum_overlap;
+            auto sum_total = std::accumulate(cc_total_cells.begin(), cc_total_cells.end(), 0);
+            ostr << std::setw(14) << sum_total << "\n";
+            Opm::OpmLog::info(ostr.str());
+        }
+        for (const auto& nc : cc_owned_cells) {
+            if (nc == 0) {
+                throw std::runtime_error("At least one process has zero cells. Aborting.");
+            }
         }
 
         current_view_data_ = distributed_data_.get();
