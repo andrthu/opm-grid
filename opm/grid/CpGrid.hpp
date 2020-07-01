@@ -172,7 +172,7 @@ namespace Dune
         /// \brief The type of the global id set.
         typedef cpgrid::GlobalIdSet GlobalIdSet;
         /// \brief The type of the local id set.
-        typedef cpgrid::IdSet LocalIdSet;
+        typedef GlobalIdSet LocalIdSet;
 
         /// \brief The type of the collective communication.
 
@@ -218,6 +218,8 @@ namespace Dune
         : public GridDefaultImplementation<3, 3, double, CpGridFamily >
     {
         friend class cpgrid::CpGridData;
+        template<int dim>
+        friend cpgrid::Entity<dim> createEntity(const CpGrid&,int,bool);
 
     public:
 
@@ -464,14 +466,14 @@ namespace Dune
         /// \brief Access to the GlobalIdSet
         const Traits::GlobalIdSet& globalIdSet() const
         {
-            return *current_view_data_->global_id_set_;
+            return global_id_set_;
         }
 
 
         /// \brief Access to the LocalIdSet
         const Traits::LocalIdSet& localIdSet() const
         {
-            return *current_view_data_->local_id_set_;
+            return global_id_set_;
         }
 
 
@@ -607,7 +609,7 @@ namespace Dune
         bool loadBalance(int overlapLayers=1)
         {
             using std::get;
-            return get<0>(scatterGrid(defaultTransEdgeWgt, nullptr, nullptr, overlapLayers ));
+            return get<0>(scatterGrid(defaultTransEdgeWgt, false, nullptr, nullptr, true, overlapLayers ));
         }
 
         // loadbalance is not part of the grid interface therefore we skip it.
@@ -631,7 +633,7 @@ namespace Dune
                     const double* transmissibilities = nullptr,
                     int overlapLayers=1)
         {
-            return scatterGrid(defaultTransEdgeWgt, wells, transmissibilities, overlapLayers);
+            return scatterGrid(defaultTransEdgeWgt, false, wells, transmissibilities, false, overlapLayers);
         }
 
         // loadbalance is not part of the grid interface therefore we skip it.
@@ -650,14 +652,16 @@ namespace Dune
         ///            adding an edge with a very high edge weight for all
         ///            possible pairs of cells in the completion set of a well.
         /// \param transmissibilities The transmissibilities used to calculate the edge weights.
+        /// \param ownersFirst Order owner cells before copy/overlap cells.
+        /// \param addCornerCells Add corner cells to the overlap layer.
         /// \param The number of layers of cells of the overlap region (default: 1).
         /// \warning May only be called once.
         std::pair<bool, std::unordered_set<std::string> >
         loadBalance(EdgeWeightMethod method, const std::vector<cpgrid::OpmWellType> * wells,
-                    const double* transmissibilities = nullptr,
-                    int overlapLayers=1)
+                    const double* transmissibilities = nullptr, bool ownersFirst=false,
+                    bool addCornerCells=false, int overlapLayers=1)
         {
-            return scatterGrid(method, wells, transmissibilities, overlapLayers);
+            return scatterGrid(method, ownersFirst, wells, transmissibilities, addCornerCells, overlapLayers);
         }
 
         /// \brief Distributes this grid and data over the available nodes in a distributed machine.
@@ -700,16 +704,18 @@ namespace Dune
         ///            adding an edge with a very high edge weight for all
         ///            possible pairs of cells in the completion set of a well.
         /// \param transmissibilities The transmissibilities used to calculate the edge weights.
+        /// \param ownersFirst Order owner cells before copy/overlap cells.
+        /// \param addCornerCells Add corner cells to the overlap layer.
         /// \param The number of layers of cells of the overlap region (default: 1).
         /// \warning May only be called once.
         template<class DataHandle>
         std::pair<bool, std::unordered_set<std::string> >
         loadBalance(DataHandle& data, EdgeWeightMethod method,
                     const std::vector<cpgrid::OpmWellType> * wells,
-                    const double* transmissibilities = nullptr,
-                    int overlapLayers=1)
+                    const double* transmissibilities = nullptr, bool ownersFirst=false,
+                    bool addCornerCells=false, int overlapLayers=1)
         {
-            auto ret = scatterGrid(method, wells, transmissibilities, overlapLayers);
+            auto ret = scatterGrid(method, ownersFirst, wells, transmissibilities, addCornerCells, overlapLayers);
             scatterData(data);
             return ret;
         }
@@ -1359,18 +1365,25 @@ namespace Dune
     private:
         /// \brief Scatter a global grid to all processors.
         /// \param method The edge-weighting method to be used on the Zoltan partitioner.
-        /// \param ecl Pointer to the eclipse state information. Default: null
+        /// \param ownersFirst Order owner cells before copy/overlap cells.
+        /// \param wells The wells of the eclipse If null wells will be neglected.
         ///            If this is not null then complete well information of
         ///            of the last scheduler step of the eclipse state will be
         ///            used to make sure that all the possible completion cells
         ///            of each well are stored on one process. This done by
         ///            adding an edge with a very high edge weight for all
         ///            possible pairs of cells in the completion set of a well.
+        /// \param transmissibilities The transmissibilities used to calculate the edge weights in
+        ///                           the Zoltan partitioner. This is done to improve the numerical
+        ///                           performance of the parallel preconditioner.
+        /// \param addCornerCells Add corner cells to the overlap layer.
+        /// \param The number of layers of cells of the overlap region.
         std::pair<bool, std::unordered_set<std::string> >
         scatterGrid(EdgeWeightMethod method,
+                    bool ownersFirst,
                     const std::vector<cpgrid::OpmWellType> * wells,
                     const double* transmissibilities,
-                    int overlapLayers);
+                    bool addCornerCells, int overlapLayers);
 
         /** @brief The data stored in the grid.
          *
@@ -1393,6 +1406,10 @@ namespace Dune
          * @warning Will only update owner cells
          */
         std::shared_ptr<InterfaceMap> point_scatter_gather_interfaces_;
+        /**
+         * @brief The global id set (also used as local one).
+         */
+        cpgrid::GlobalIdSet global_id_set_;
     }; // end Class CpGrid
 
 

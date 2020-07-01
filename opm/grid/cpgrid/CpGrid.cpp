@@ -118,7 +118,8 @@ namespace Dune
           current_view_data_(data_.get()),
           distributed_data_(),
           cell_scatter_gather_interfaces_(new InterfaceMap),
-          point_scatter_gather_interfaces_(new InterfaceMap)
+          point_scatter_gather_interfaces_(new InterfaceMap),
+          global_id_set_(*current_view_data_)
     {}
 
 
@@ -127,14 +128,17 @@ namespace Dune
           current_view_data_(data_.get()),
           distributed_data_(),
           cell_scatter_gather_interfaces_(new InterfaceMap),
-          point_scatter_gather_interfaces_(new InterfaceMap)
+          point_scatter_gather_interfaces_(new InterfaceMap),
+          global_id_set_(*current_view_data_)
     {}
 
 
-
 std::pair<bool, std::unordered_set<std::string> >
-CpGrid::scatterGrid(EdgeWeightMethod method, const std::vector<cpgrid::OpmWellType> * wells,
-                    const double* transmissibilities, int overlapLayers)
+CpGrid::scatterGrid(EdgeWeightMethod method,
+                    [[maybe_unused]] bool ownersFirst,
+                    const std::vector<cpgrid::OpmWellType> * wells,
+                    const double* transmissibilities,
+                    [[maybe_unused]] bool addCornerCells, int overlapLayers)
 {
     // Silence any unused argument warnings that could occur with various configurations.
     static_cast<void>(wells);
@@ -196,12 +200,11 @@ CpGrid::scatterGrid(EdgeWeightMethod method, const std::vector<cpgrid::OpmWellTy
         // }
 #endif
 
-        bool ownersFirst = false;
-
         // first create the overlap
         // map from process to global cell indices in overlap
         std::map<int,std::set<int> > overlap;
-        auto noImportedOwner = addOverlapLayer(*this, cell_part, exportList, importList, cc);
+        auto noImportedOwner = addOverlapLayer(*this, cell_part, exportList, importList, cc, addCornerCells,
+                                               transmissibilities);
         // importList contains all the indices that will be here.
         auto compareImport = [](const std::tuple<int,int,char,int>& t1,
                                 const std::tuple<int,int,char,int>&t2)
@@ -246,6 +249,7 @@ CpGrid::scatterGrid(EdgeWeightMethod method, const std::vector<cpgrid::OpmWellTy
         setupRecvInterface(importList, *cell_scatter_gather_interfaces_);
 
         distributed_data_->distributeGlobalGrid(*this,*this->current_view_data_, cell_part);
+        global_id_set_.insertIdSet(*distributed_data_);
 
 
         // Compute the partition type for cell
@@ -326,10 +330,10 @@ CpGrid::scatterGrid(EdgeWeightMethod method, const std::vector<cpgrid::OpmWellTy
     {
         if ( current_view_data_->ccobj_.rank() != 0 )
         {
-            grdecl g;
-            g.dims[0] = g.dims[1] = g.dims[2] = 0;
-            current_view_data_->processEclipseFormat(g, {}, 0.0, false, false);
             // global grid only on rank 0
+            current_view_data_->ccobj_.broadcast(current_view_data_->logical_cartesian_size_.data(),
+                                                 current_view_data_->logical_cartesian_size_.size(),
+                                                 0);
             return;
         }
 
@@ -370,21 +374,29 @@ CpGrid::scatterGrid(EdgeWeightMethod method, const std::vector<cpgrid::OpmWellTy
         g.zcorn = &zcorn[0];
         g.actnum = &actnum[0];
         current_view_data_->processEclipseFormat(g, {}, 0.0, false, false);
+        // global grid only on rank 0
+        current_view_data_->ccobj_.broadcast(current_view_data_->logical_cartesian_size_.data(),
+                                             current_view_data_->logical_cartesian_size_.size(),
+                                             0);
     }
 
     void CpGrid::readSintefLegacyFormat(const std::string& grid_prefix)
     {
-        current_view_data_->readSintefLegacyFormat(grid_prefix);
+        if ( current_view_data_->ccobj_.rank() == 0 )
+        {
+            current_view_data_->readSintefLegacyFormat(grid_prefix);
+        }
         current_view_data_->ccobj_.broadcast(current_view_data_->logical_cartesian_size_.data(),
                                              current_view_data_->logical_cartesian_size_.size(),
                                              0);
     }
     void CpGrid::writeSintefLegacyFormat(const std::string& grid_prefix) const
     {
-        current_view_data_->writeSintefLegacyFormat(grid_prefix);
-        current_view_data_->ccobj_.broadcast(current_view_data_->logical_cartesian_size_.data(),
-                                             current_view_data_->logical_cartesian_size_.size(),
-                                             0);
+        // Only rank 0 has the full data. Use that for writing.
+        if ( current_view_data_->ccobj_.rank() == 0 )
+        {
+            data_->writeSintefLegacyFormat(grid_prefix);
+        }
     }
 
 

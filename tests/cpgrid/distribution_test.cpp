@@ -26,6 +26,18 @@
 
 #include <opm/grid/utility/platform_dependent/reenable_warnings.h>
 
+namespace Dune
+{
+template<int dim>
+Dune::cpgrid::Entity<dim> createEntity(const Dune::CpGrid& grid, int index, bool orientation)
+{
+    return Dune::cpgrid::Entity<dim>(*grid.current_view_data_, index, orientation);
+}
+/*
+template Dune::cpgrid::Entity<1> createEntity<1>(const Dune::CpGrid& grid, int index, bool orientation);
+template Dune::cpgrid::Entity<3> createEntity<3>(const Dune::CpGrid& grid, int index, bool orientation);
+*/
+} // end namespace Dune
 
 #if HAVE_MPI
 class MPIError {
@@ -429,16 +441,16 @@ BOOST_AUTO_TEST_CASE(compareWithSequential)
             using namespace Dune::cpgrid;
             auto face = grid.cellFace(eIt->index(), f);
             auto seqFace = seqGrid.cellFace(seqEIt->index(), f);
-            BOOST_REQUIRE(idSet.id(EntityRep<1>(face, true)) ==
-                          seqIdSet.id(EntityRep<1>(seqFace, true)));
+            BOOST_REQUIRE(idSet.id(Dune::createEntity<1>(grid, face, true)) ==
+                          seqIdSet.id(Dune::createEntity<1>(seqGrid, seqFace, true)));
             int vertices = grid.numFaceVertices(face);
             BOOST_REQUIRE(vertices == seqGrid.numFaceVertices(seqFace));
             for (int v = 0; v < vertices; ++v)
             {
                 auto vertex = grid.faceVertex(face, v);
                 auto seqVertex = seqGrid.faceVertex(seqFace, v);
-                BOOST_REQUIRE(idSet.id(EntityRep<3>(vertex, true)) ==
-                              seqIdSet.id(EntityRep<3>(seqVertex, true)));
+                BOOST_REQUIRE(idSet.id(Dune::createEntity<3>(grid, vertex, true)) ==
+                              seqIdSet.id(Dune::createEntity<3>(seqGrid, seqVertex, true)));
                 BOOST_REQUIRE(grid.vertexPosition(vertex) ==
                               seqGrid.vertexPosition(seqVertex));
             }
@@ -486,13 +498,7 @@ BOOST_AUTO_TEST_CASE(distribute)
         typedef GridView :: Codim<0> :: Iterator LeafIterator ;
         for (LeafIterator it = gridView.begin<0>();
              it != gridView.end<0>(); ++it) {
-#if DUNE_VERSION_NEWER(DUNE_GEOMETRY, 2, 6)
             auto ref = Dune::ReferenceElements<Dune::CpGrid::ctype,3>::cube();
-#else
-            Dune::GeometryType gt = it->type () ;
-            const Dune::ReferenceElement<Dune::CpGrid::ctype, 3>& ref=
-                Dune::ReferenceElements<Dune::CpGrid::ctype, 3>::general(gt);
-#endif
 
             cell_indices.push_back(ix.index(*it));
             cell_centers.push_back(it->geometry().center());
@@ -544,13 +550,7 @@ BOOST_AUTO_TEST_CASE(distribute)
 
         for (Dune::CpGrid::Codim<0>::LeafIterator it = grid.leafbegin<0>();
              it != grid.leafend<0>(); ++it) {
-#if DUNE_VERSION_NEWER(DUNE_GEOMETRY, 2, 6)
             auto ref = Dune::ReferenceElements<Dune::CpGrid::ctype,3>::cube();
-#else
-            Dune::GeometryType gt = it->type () ;
-            const Dune::ReferenceElement<Dune::CpGrid::ctype, 3>& ref=
-                Dune::ReferenceElements<Dune::CpGrid::ctype, 3>::general(gt);
-#endif
 
             BOOST_REQUIRE(cell_indices[cell_index]==ix1.index(*it));
             BOOST_REQUIRE(cell_centers[cell_index++]==it->geometry().center());
