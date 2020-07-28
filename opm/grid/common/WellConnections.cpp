@@ -144,7 +144,7 @@ postProcessPartitioningForWells(std::vector<int>& parts,
                                      no_connections_on_proc.end(),
                                      [](const std::pair<int, std::size_t> &p1,
                                         const std::pair<int, std::size_t> &p2) {
-                                         return (p1.second > p2.second);
+                                         return (p1.second < p2.second); // Compare shold ruturn true if p1<p2.
                                      })
                     ->first;
                 std::cout << "Manually moving well " << well.name()
@@ -158,15 +158,19 @@ postProcessPartitioningForWells(std::vector<int>& parts,
                 std::vector<int> myConnections;
                 myConnections.reserve(connections.size());
                 for (auto connection_cell : connections) {
-                    const auto &global = globalCell[connection_cell];
                     auto old_owner = parts[connection_cell];
-                    if (old_owner != cc.rank()) //otherwise there is not entry
-                        removeCells[old_owner].push_back(global);
+                    if (old_owner != cc.rank()) { //otherwise there is not entry
+			if (old_owner != new_owner) { // Only remove cells that change owner
+			    removeCells[old_owner].push_back(connection_cell);
+			}
+		    }
                     else
-                        myConnections.push_back(global);
+                        myConnections.push_back(connection_cell);
                     parts[connection_cell] = new_owner;
-                    if (new_owner != cc.rank()) // no entry assumed for rank
-                        add.push_back(global);
+                    if (new_owner != cc.rank()) { // no entry assumed for rank
+			if (old_owner != new_owner)
+			    add.push_back(connection_cell);
+		    }
                 }
                 std::sort(myConnections.begin(), myConnections.end());
                 std::sort(oldEnd, add.end());
@@ -188,6 +192,8 @@ postProcessPartitioningForWells(std::vector<int>& parts,
                 }
                 std::sort(middle, exportList.end(), Less());
                 std::inplace_merge(exportList.begin(), middle, exportList.end(), Less());
+
+		owner = new_owner; // Correct owner gets well.
             }
 
             well_indices_on_proc[owner].push_back(well_index);
@@ -226,11 +232,11 @@ postProcessPartitioningForWells(std::vector<int>& parts,
         for (int otherRank = 0; otherRank < cc.size(); ++otherRank)
             if (otherRank != myRank) {
                 std::size_t sizes[2] = {0, 0};
-                auto candidate = addCells.find(myRank);
+                auto candidate = addCells.find(otherRank);
                 if (candidate != addCells.end())
                     sizes[0] = candidate->second.size();
 
-                candidate = removeCells.find(myRank);
+                candidate = removeCells.find(otherRank);
                 if (candidate != removeCells.end())
                     sizes[1] = candidate->second.size();
                 MPI_Send(sizes, 2, mpiType, otherRank, tag, cc);
@@ -247,6 +253,7 @@ postProcessPartitioningForWells(std::vector<int>& parts,
 
     req = requests.begin();
     std::vector<std::vector<std::size_t>> cellIndexBuffers; // receive buffers for indices of each rank.
+    cellIndexBuffers.resize(cellsPerProc.size());
 
     for (auto it = begin, end = cellsPerProc.end(); it != end; ++it) {
         auto otherRank = it - begin;
