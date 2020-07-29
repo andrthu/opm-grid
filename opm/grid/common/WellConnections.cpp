@@ -96,7 +96,6 @@ void WellConnections::init(const std::vector<OpmWellType>& wells,
 #ifdef HAVE_MPI
 std::vector<std::vector<int> >
 postProcessPartitioningForWells(std::vector<int>& parts,
-                                const std::vector<int>& globalCell,
                                 const std::vector<OpmWellType>& wells,
                                 const WellConnections& well_connections,
                                 std::vector<std::tuple<int,int,char>>& exportList,
@@ -155,30 +154,33 @@ postProcessPartitioningForWells(std::vector<int>& parts,
                 std::map<int, std::vector<int>> tmpRemove;
                 auto &add = addCells[new_owner];
                 auto oldEnd = add.end();
+                bool addEmpty = add.size() < 1;
                 std::vector<int> myConnections;
                 myConnections.reserve(connections.size());
                 for (auto connection_cell : connections) {
                     auto old_owner = parts[connection_cell];
                     if (old_owner != cc.rank()) { //otherwise there is not entry
-			if (old_owner != new_owner) { // Only remove cells that change owner
-			    removeCells[old_owner].push_back(connection_cell);
-			}
-		    }
+                        if (old_owner != new_owner) { // Only remove cells that change owner
+                            removeCells[old_owner].push_back(connection_cell);
+                        }
+                    }
                     else
                         myConnections.push_back(connection_cell);
                     parts[connection_cell] = new_owner;
                     if (new_owner != cc.rank()) { // no entry assumed for rank
-			if (old_owner != new_owner)
-			    add.push_back(connection_cell);
-		    }
+                        if (old_owner != new_owner)
+                            add.push_back(connection_cell);
+                    }
                 }
                 std::sort(myConnections.begin(), myConnections.end());
+                if (addEmpty)
+                    oldEnd = add.begin();
                 std::sort(oldEnd, add.end());
                 exportList.reserve(exportList.size()+myConnections.size()); // We might store new entries
                 auto start  = exportList.begin();
                 auto middle = exportList.end();
 
-                for (auto movedCell = oldEnd; oldEnd != add.end(); ++movedCell) {
+                for (auto movedCell = oldEnd; movedCell != add.end(); ++movedCell) {
                     auto myCandidate = std::lower_bound(myConnections.begin(), myConnections.end(), *movedCell);
                     if (myCandidate == myConnections.end()){
                         auto candidate = std::lower_bound(start, middle, *movedCell, Less());
@@ -193,7 +195,7 @@ postProcessPartitioningForWells(std::vector<int>& parts,
                 std::sort(middle, exportList.end(), Less());
                 std::inplace_merge(exportList.begin(), middle, exportList.end(), Less());
 
-		owner = new_owner; // Correct owner gets well.
+                owner = new_owner; // Correct owner gets well.
             }
 
             well_indices_on_proc[owner].push_back(well_index);

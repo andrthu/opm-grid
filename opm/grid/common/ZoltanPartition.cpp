@@ -144,7 +144,6 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     {
         wells_on_proc =
             postProcessPartitioningForWells(parts,
-                                            cpgrid.globalCell(),
                                             *wells,
                                             grid_and_wells->getWellConnections(),
                                             myExportList, myImportList,

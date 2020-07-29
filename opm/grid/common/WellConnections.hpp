@@ -134,7 +134,6 @@ private:
 /// \param cc Information about the parallelism together with the decomposition.
 std::vector<std::vector<int> >
 postProcessPartitioningForWells(std::vector<int>& parts,
-                                const std::vector<int>& globalCell,
                                 const std::vector<OpmWellType>&  wells,
                                 const WellConnections& well_connections,
                                 std::vector<std::tuple<int,int,char>>& exportList,
