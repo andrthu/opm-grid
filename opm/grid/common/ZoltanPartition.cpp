@@ -308,7 +308,8 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
                                                        wells,
                                                        transmissibilities,
                                                        partitionIsEmpty,
-                                                       edgeWeightsMethod));
+						       edgeWeightsMethod,
+						       allowDistributedWells));
         Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, *gridAndWells,
                                                     partitionIsEmpty);
     }
@@ -376,7 +377,8 @@ public:
         if (wells) {
             const bool partitionIsEmpty = cc.rank() != root;
             gridAndWells.reset(
-                new CombinedGridWellGraph(cpgrid, wells, transmissibilities, partitionIsEmpty, edgeWeightsMethod));
+			       new CombinedGridWellGraph(cpgrid, wells, transmissibilities, partitionIsEmpty,
+							 edgeWeightsMethod, _allowDistributedWells));
         }
     }
 
