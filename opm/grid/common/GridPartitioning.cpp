@@ -640,7 +640,8 @@ namespace cpgrid
                                                                  wells,
                                                                  transmissibilities,
                                                                  partitionIsEmpty,
-                                                                 method));
+                                                                 method,
+								 allowDistributedWells));
         }
         return makeImportAndExportLists(grid, grid.comm(),
                                         wells,

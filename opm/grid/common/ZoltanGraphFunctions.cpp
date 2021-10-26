@@ -262,16 +262,21 @@ void getCpGridWellsEdgeList(void *graphPointer, int sizeGID, int sizeLID,
 #endif
     int idx = 0;
 
+    bool distWells = graph.allowDistWells();
     for( int cell = 0; cell < numCells;  cell++ )
     {
         const int currentCell = localID[cell];
 
         // First the strong edges of the well completions.
         auto wellEdges = graph.getWellsGraph()[currentCell];
+	
         for( auto edge : wellEdges)
         {
             nborGID[idx] = edge;
-            ewgts[idx++] = std::numeric_limits<float>::max();
+	    if (distWells)
+		ewgts[idx++] = 0;
+	    else
+		ewgts[idx++] = std::numeric_limits<float>::max();
         }
 
         // Now the ones of the grid that are not handled by the well completions
@@ -336,8 +341,9 @@ CombinedGridWellGraph::CombinedGridWellGraph(const CpGrid& grid,
                                              const std::vector<OpmWellType> * wells,
                                              const double* transmissibilities,
                                              bool pretendEmptyGrid,
-                                             EdgeWeightMethod edgeWeightsMethod)
-    : grid_(grid), transmissibilities_(transmissibilities), edgeWeightsMethod_(edgeWeightsMethod)
+                                             EdgeWeightMethod edgeWeightsMethod,
+					     bool distWells)
+    : grid_(grid), transmissibilities_(transmissibilities), edgeWeightsMethod_(edgeWeightsMethod), distWells_(distWells)
 {
     if ( pretendEmptyGrid )
     {
