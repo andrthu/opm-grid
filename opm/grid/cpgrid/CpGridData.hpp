@@ -74,7 +74,7 @@
 #include <opm/grid/utility/platform_dependent/reenable_warnings.h>
 
 #if HAVE_ECL_INPUT
-#include <opm/parser/eclipse/EclipseState/Grid/NNC.hpp>
+#include <opm/input/eclipse/EclipseState/Grid/NNC.hpp>
 #endif
 
 #include <array>
@@ -146,9 +146,6 @@ public:
         MAX_DATA_PER_CELL = MAX_DATA_COMMUNICATED_PER_ENTITY
 #endif
     };
-    /// Constructor
-    /// \param grid  The grid that we are the data of.
-    explicit CpGridData(CpGrid& grid);
 
     /// Constructor for parallel grid data.
     /// \param comm The MPI communicator
