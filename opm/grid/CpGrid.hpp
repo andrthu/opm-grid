@@ -890,6 +890,15 @@ namespace Dune
             return ret;
         }
 
+         /// \brief Partitions the grid using Zoltan without decomposing and distributing it among processes.
+         /// \param wells The wells of the eclipse.
+         /// \param transmissibilities The transmissibilities used to calculate the edge weights.
+         /// \param numParts Number of parts in the partition.
+         /// \return 
+         std::vector<int> zoltanPartitionWithoutScatter(const std::vector<cpgrid::OpmWellType> * wells,
+                                                        const double* transmissibilities, int numParts,
+							const double zoltanImbalanceTol);
+
         /// The new communication interface.
         /// \brief communicate objects for all codims on a given level
         /// \param data The data handle describing the data. Has to adhere to the
