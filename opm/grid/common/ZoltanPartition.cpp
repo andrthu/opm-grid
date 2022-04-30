@@ -378,7 +378,7 @@ public:
         , root(_root)
         , zoltanImbalanceTol(_zoltanImbalanceTol)
         , allowDistributedWells(_allowDistributedWells)
-        , numParts(_numParts) 
+        , numParts(_numParts)
     {
         if (wells) {
             const bool partitionIsEmpty = cc.rank() != root;
@@ -417,6 +417,7 @@ public:
         if (cc.rank() == root) {
             rc = callZoltan();
         }
+
         cc.broadcast(&rc, 1, root);
         if (rc != ZOLTAN_OK) {
             OPM_THROW(std::runtime_error, "Could not initialize Zoltan, or Zoltan partitioning failed.");
@@ -559,7 +560,8 @@ zoltanSerialGraphPartitionGridOnRoot(const CpGrid& cpgrid,
     return partitioner.partition();
 }
 
-std::vector<int>           
+
+std::vector<int>
 zoltanGraphPartitionGridForJac(const CpGrid& cpgrid,
                                const std::vector<OpmWellType> * wells,
                                const double* transmissibilities,
