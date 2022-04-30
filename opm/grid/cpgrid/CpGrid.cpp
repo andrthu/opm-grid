@@ -56,6 +56,8 @@
 #include <iomanip>
 #include <tuple>
 
+#include <dune/common/timer.hh>
+
 namespace
 {
 
@@ -136,8 +138,8 @@ namespace Dune
     {}
 
 std::vector<int> CpGrid::zoltanPartitionWithoutScatter(const std::vector<cpgrid::OpmWellType> * wells,
-						       const double* transmissibilities, int numParts,
-						       const double zoltanImbalanceTol)
+                                                       const double* transmissibilities, int numParts,
+                                                       const double zoltanImbalanceTol)
 {
     std::vector<int> cell_part(this->numCells());
 #if HAVE_MPI
@@ -146,13 +148,12 @@ std::vector<int> CpGrid::zoltanPartitionWithoutScatter(const std::vector<cpgrid:
     EdgeWeightMethod met = EdgeWeightMethod(1);
 
     return cpgrid::zoltanGraphPartitionGridForJac(*this, wells, transmissibilities, cc, met, 0,
-						  numParts, zoltanImbalanceTol);
+                                                  numParts, zoltanImbalanceTol);
 
 #endif
 #endif
     return cell_part;
 }
-
 
 std::pair<bool, std::vector<std::pair<std::string,bool> > >
 CpGrid::scatterGrid(EdgeWeightMethod method,
@@ -182,6 +183,7 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
     }
 
 #if HAVE_MPI
+    Dune::Timer timer;
     auto& cc = data_->ccobj_;
 
     if (cc.size() > 1)
@@ -268,10 +270,19 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
             if (useZoltan)
             {
 #ifdef HAVE_ZOLTAN
+		timer.start();
                 std::tie(computedCellPart, wells_on_proc, exportList, importList, wellConnections)
                     = serialPartitioning
                     ? cpgrid::zoltanSerialGraphPartitionGridOnRoot(*this, wells, transmissibilities, cc, method, 0, zoltanImbalanceTol, allowDistributedWells)
                     : cpgrid::zoltanGraphPartitionGridOnRoot(*this, wells, transmissibilities, cc, method, 0, zoltanImbalanceTol, allowDistributedWells);
+		comm().barrier();
+		double zoltTime = timer.stop();
+		
+		if (cc.rank()==0) {
+		    std::ostringstream ostrzt;
+		    ostrzt << "Zoltan partition time: " << zoltTime << std::endl;
+		    Opm::OpmLog::info(ostrzt.str());
+		}
 #else
                 OPM_THROW(std::runtime_error, "Parallel runs depend on ZOLTAN if useZoltan is true. Please install!");
 #endif // HAVE_ZOLTAN
@@ -284,6 +295,8 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
         }
         comm().barrier();
 
+	timer.reset();
+	timer.start();
         // first create the overlap
         auto noImportedOwner = addOverlapLayer(*this, computedCellPart, exportList, importList, cc, addCornerCells,
                                                transmissibilities);
@@ -445,6 +458,13 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
 
 
         current_view_data_ = distributed_data_.get();
+	comm().barrier();
+	double scatterTime = timer.stop();
+	if (cc.rank()==0) {
+	    std::ostringstream ostrst;
+	    ostrst << "Scatter Grid time: " << scatterTime << std::endl;
+	    Opm::OpmLog::info(ostrst.str());
+	}
         return std::make_pair(true, wells_on_proc);
     }
     else

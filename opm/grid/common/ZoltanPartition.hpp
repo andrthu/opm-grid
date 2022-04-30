@@ -198,14 +198,12 @@ zoltanSerialGraphPartitionGridOnRoot(const CpGrid& grid,
 std::vector<int>
 zoltanGraphPartitionGridForJac(const CpGrid& cpgrid,
                                const std::vector<OpmWellType> * wells,
-			       const double* transmissibilities,
-			       const CollectiveCommunication<MPI_Comm>& cc,
-			       EdgeWeightMethod edgeWeightsMethod, int root,
-			       int numParts, const double zoltanImbalanceTol);
+                               const double* transmissibilities,
+                               const CollectiveCommunication<MPI_Comm>& cc,
+                               EdgeWeightMethod edgeWeightsMethod, int root,
+                               int numParts, const double zoltanImbalanceTol);
 
 }
 }
-
-
 #endif // HAVE_ZOLTAN
 #endif // header guard

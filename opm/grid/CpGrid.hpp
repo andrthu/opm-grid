@@ -897,7 +897,7 @@ namespace Dune
          /// \return 
          std::vector<int> zoltanPartitionWithoutScatter(const std::vector<cpgrid::OpmWellType> * wells,
                                                         const double* transmissibilities, int numParts,
-							const double zoltanImbalanceTol);
+                                                        const double zoltanImbalanceTol);
 
         /// The new communication interface.
         /// \brief communicate objects for all codims on a given level

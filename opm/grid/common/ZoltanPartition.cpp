@@ -312,8 +312,8 @@ zoltanGraphPartitionGridOnRoot(const CpGrid& cpgrid,
                                                        wells,
                                                        transmissibilities,
                                                        partitionIsEmpty,
-						       edgeWeightsMethod,
-						       allowDistributedWells));
+                                                       edgeWeightsMethod,
+                                                       allowDistributedWells));
         Dune::cpgrid::setCpGridZoltanGraphFunctions(zz, *gridAndWells,
                                                     partitionIsEmpty);
     }
@@ -369,7 +369,7 @@ public:
                             int _root,
                             const double _zoltanImbalanceTol,
                             bool _allowDistributedWells,
-			    int _numParts)
+                            int _numParts)
         : cpgrid(_cpgrid)
         , wells(_wells)
         , transmissibilities(_transmissibilities)
@@ -378,30 +378,30 @@ public:
         , root(_root)
         , zoltanImbalanceTol(_zoltanImbalanceTol)
         , allowDistributedWells(_allowDistributedWells)
-	, numParts(_numParts) 
+        , numParts(_numParts) 
     {
         if (wells) {
             const bool partitionIsEmpty = cc.rank() != root;
             gridAndWells.reset(
-			       new CombinedGridWellGraph(cpgrid, wells, transmissibilities, partitionIsEmpty,
-							 edgeWeightsMethod, _allowDistributedWells));
+                new CombinedGridWellGraph(cpgrid, wells, transmissibilities, partitionIsEmpty,
+                                          edgeWeightsMethod, _allowDistributedWells));
         }
     }
 
 
     std::vector<int> partitionForInfo()
     {
-	if (cc.rank() == root) {
+        if (cc.rank() == root) {
             callZoltan();
         }
 
-	int size = cpgrid.numCells();
-	std::vector<int> parts(size, 0);
+        int size = cpgrid.numCells();
+        std::vector<int> parts(size, 0);
 
-	for ( int i=0; i < numExport; ++i ) {
-	    parts[i] = exportToPart[i];
-	}
-	return parts;
+        for ( int i=0; i < numExport; ++i ) {
+            parts[i] = exportToPart[i];
+        }
+        return parts;
     }
     std::tuple<std::vector<int>,
                std::vector<std::pair<std::string, bool>>,
@@ -417,7 +417,6 @@ public:
         if (cc.rank() == root) {
             rc = callZoltan();
         }
-	
         cc.broadcast(&rc, 1, root);
         if (rc != ZOLTAN_OK) {
             OPM_THROW(std::runtime_error, "Could not initialize Zoltan, or Zoltan partitioning failed.");
@@ -470,14 +469,14 @@ private:
 
         setDefaultZoltanParameters(zz);
         Zoltan_Set_Param(zz, "IMBALANCE_TOL", std::to_string(zoltanImbalanceTol).c_str());
-	if (numParts > 0) {
-	    Zoltan_Set_Param(zz, "NUM_GLOBAL_PARTS", std::to_string(numParts).c_str());
-	    Zoltan_Set_Param(zz, "NUM_GLOBAL_PARTS", std::to_string(numParts).c_str());
-	    Zoltan_Set_Param(zz, "RETURN_LISTS", "PARTS");
-	    Zoltan_Set_Param(zz, "DEBUG_LEVEL", "2");	    
-	}
-	else
-	    Zoltan_Set_Param(zz, "NUM_GLOBAL_PARTS", std::to_string(cc.size()).c_str());
+        if (numParts > 0) {
+            Zoltan_Set_Param(zz, "NUM_GLOBAL_PARTS", std::to_string(numParts).c_str());
+            Zoltan_Set_Param(zz, "NUM_GLOBAL_PARTS", std::to_string(numParts).c_str());
+            Zoltan_Set_Param(zz, "RETURN_LISTS", "PARTS");
+            Zoltan_Set_Param(zz, "DEBUG_LEVEL", "2");
+        }
+        else
+            Zoltan_Set_Param(zz, "NUM_GLOBAL_PARTS", std::to_string(cc.size()).c_str());
         // For the load balancer one process has the whole grid and
         // all others an empty partition before loadbalancing.
         bool partitionIsEmpty = cc.rank() != root;
@@ -503,7 +502,7 @@ private:
                                  &exportLocalGids, /* Local IDs of the vertices I must send */
                                  &exportProcs, /* Process to which I send each of the vertices */
                                  &exportToPart); /* Partition to which each vertex will belong */
-	std::cout << numExport<<" "<< cpgrid.numCells() << std::endl;
+
         // This is very important: by default, zoltan sets numImport to -1,
         // as we are only running Zoltan in serial.
         // In order to make sense of the rest of  the code, this must be set
@@ -563,10 +562,10 @@ zoltanSerialGraphPartitionGridOnRoot(const CpGrid& cpgrid,
 std::vector<int>           
 zoltanGraphPartitionGridForJac(const CpGrid& cpgrid,
                                const std::vector<OpmWellType> * wells,
-			       const double* transmissibilities,
-			       const CollectiveCommunication<MPI_Comm>& cc,
-			       EdgeWeightMethod edgeWeightsMethod, int root,
-			       int numParts, const double zoltanImbalanceTol)
+                               const double* transmissibilities,
+                               const CollectiveCommunication<MPI_Comm>& cc,
+                               EdgeWeightMethod edgeWeightsMethod, int root,
+                               int numParts, const double zoltanImbalanceTol)
 {
     ZoltanSerialPartitioner partitioner(cpgrid, wells, transmissibilities, cc, edgeWeightsMethod,
                                         root, zoltanImbalanceTol, false, numParts);
