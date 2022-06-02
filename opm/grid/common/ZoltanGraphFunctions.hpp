@@ -187,6 +187,14 @@ public:
         else
             return 1.0;
     }
+
+    double distWellEdgeWeight() const
+    {
+	if (edgeWeightsMethod_ == uniformEdgeWgt)
+	    return 1.0;
+	else
+	    return 0.0;
+    }
 private:
 
     void addCompletionSetToGraph()

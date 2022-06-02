@@ -274,7 +274,7 @@ void getCpGridWellsEdgeList(void *graphPointer, int sizeGID, int sizeLID,
         {
             nborGID[idx] = edge;
 	    if (distWells)
-		ewgts[idx++] = 0;
+		ewgts[idx++] = graph.distWellEdgeWeight();
 	    else
 		ewgts[idx++] = std::numeric_limits<float>::max();
         }
