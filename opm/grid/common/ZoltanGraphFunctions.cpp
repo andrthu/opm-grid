@@ -269,7 +269,6 @@ void getCpGridWellsEdgeList(void *graphPointer, int sizeGID, int sizeLID,
 
         // First the strong edges of the well completions.
         auto wellEdges = graph.getWellsGraph()[currentCell];
-	
         for( auto edge : wellEdges)
         {
             nborGID[idx] = edge;
@@ -342,7 +341,7 @@ CombinedGridWellGraph::CombinedGridWellGraph(const CpGrid& grid,
                                              const double* transmissibilities,
                                              bool pretendEmptyGrid,
                                              EdgeWeightMethod edgeWeightsMethod,
-					     bool distWells)
+                                             bool distWells)
     : grid_(grid), transmissibilities_(transmissibilities), edgeWeightsMethod_(edgeWeightsMethod), distWells_(distWells)
 {
     if ( pretendEmptyGrid )
