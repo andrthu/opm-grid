@@ -43,6 +43,7 @@
 #include <opm/grid/utility/platform_dependent/disable_warnings.h>
 
 #include <dune/grid/common/grid.hh>
+#include <dune/istl/bcrsmatrix.hh>
 
 #include <opm/grid/utility/platform_dependent/reenable_warnings.h>
 
@@ -944,11 +945,13 @@ namespace Dune
                     const double* transmissibilities = nullptr, bool ownersFirst=false,
                     bool addCornerCells=false, int overlapLayers=1, int partitionMethod = Dune::PartitionMethod::zoltanGoG,
                     double imbalanceTol = 1.1,
-                    bool allowDistributedWells = false)
+                    bool allowDistributedWells = false,
+		    Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* graph = nullptr,
+		    double coarseThreshold = 1.0)
         {
             auto ret = scatterGrid(method, ownersFirst, wells, possibleFutureConnections, serialPartitioning, transmissibilities,
                                    addCornerCells, overlapLayers, partitionMethod, imbalanceTol, allowDistributedWells,
-                                   /* input_cell_parts = */ std::vector<int>{}, /* level = */ 0);
+                                   /* input_cell_parts = */ std::vector<int>{}, /* level = */ 0, graph, coarseThreshold);
             using std::get;
             if (get<0>(ret))
             {
@@ -1465,7 +1468,9 @@ namespace Dune
                     double imbalanceTol = 1.1,
                     bool allowDistributedWells = true,
                     const std::vector<int>& input_cell_part = {},
-                    int level = -1);
+                    int level = -1,
+		    Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph = nullptr,
+		    double coarseThreshold = 1.0);
 
         /** @brief The data stored in the grid.
          *

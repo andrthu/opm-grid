@@ -26,6 +26,8 @@
 #ifndef GRAPH_OF_GRID_WRAPPERS_HEADER
 #define GRAPH_OF_GRID_WRAPPERS_HEADER
 
+#include <dune/istl/bcrsmatrix.hh>
+
 #include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/grid/GraphOfGrid.hpp>
 #include <opm/grid/common/WellConnections.hpp>
@@ -301,6 +303,26 @@ zoltanSerialPartitioningWithGraphOfGrid(const Dune::CpGrid& grid,
                                         const double zoltanImbalanceTol,
                                         bool allowDistributedWells,
                                         const std::map<std::string,std::string>& params);
+
+/// \brief Call serial Zoltan partitioner on GraphOfGrid
+///
+/// GraphOfGrid represents a well by one vertex, so wells can not be
+/// spread over several processes.
+std::tuple<std::vector<int>, std::vector<std::pair<std::string, bool>>,
+           std::vector<std::tuple<int,int,char> >,
+           std::vector<std::tuple<int,int,char,int> >,
+           Dune::cpgrid::WellConnections>
+zoltanSerialPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
+                                        const std::vector<Dune::cpgrid::OpmWellType> * wells,
+                                        const std::unordered_map<std::string, std::set<int>>& possibleFutureConnections,
+                                        const double* transmissibilities,
+                                        const Dune::cpgrid::CpGridDataTraits::Communication& cc,
+                                        Dune::EdgeWeightMethod edgeWeightMethod,
+                                        int root,
+                                        const double zoltanImbalanceTol,
+                                        bool allowDistributedWells,
+                                        const std::map<std::string,std::string>& params,
+                                        Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph);
 #endif // HAVE_MPI
 
 } // end namespace Opm

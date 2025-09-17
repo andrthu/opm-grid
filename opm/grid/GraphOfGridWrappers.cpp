@@ -849,6 +849,105 @@ zoltanSerialPartitioningWithGraphOfGrid(const Dune::CpGrid& grid,
                            std::move(myImportList),
                            std::move(wellConnections));
 }
+
+std::tuple<std::vector<int>,
+           std::vector<std::pair<std::string, bool>>,
+           std::vector<std::tuple<int,int,char> >,
+           std::vector<std::tuple<int,int,char,int> >,
+           Dune::cpgrid::WellConnections>
+zoltanSerialPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
+                                        const std::vector<Dune::cpgrid::OpmWellType> * wells,
+                                        const std::unordered_map<std::string, std::set<int>>& possibleFutureConnections,
+                                        const double* transmissibilities,
+                                        const Dune::cpgrid::CpGridDataTraits::Communication& cc,
+                                        Dune::EdgeWeightMethod edgeWeightMethod,
+                                        int root,
+                                        const double zoltanImbalanceTol,
+                                        bool allowDistributedWells,
+                                        const std::map<std::string, std::string>& params,
+                                        Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph)
+{
+    // root process has the whole grid, other ranks nothing
+    bool partitionIsEmpty = cc.rank() != root;
+    int rc = ZOLTAN_OK;
+    std::vector<int> gIDtoRank;
+    using AttributeSet = Dune::cpgrid::CpGridData::AttributeSet;
+    std::vector<std::tuple<int, int, char>> myExportList;
+    std::vector<std::tuple<int, int, char, int>> myImportList;
+    std::vector<std::vector<int>> exportedCells;
+    auto wellConnections = partitionIsEmpty || !wells ? Dune::cpgrid::WellConnections()
+                                                      : Dune::cpgrid::WellConnections(*wells, possibleFutureConnections, grid);
+
+    if (cc.rank() == root) {
+        std::tie(rc, gIDtoRank) = applySerialZoltan(grid,
+                                                    wellConnections,
+                                                    transmissibilities,
+                                                    cc.size(),
+                                                    edgeWeightMethod,
+                                                    root,
+                                                    zoltanImbalanceTol,
+                                                    allowDistributedWells,
+                                                    params);
+    }
+
+    cc.broadcast(&rc, 1, root);
+    if (rc != ZOLTAN_OK) {
+        switch (rc) {
+        case ZOLTAN_OK+1:
+            OPM_THROW(std::runtime_error, "Could not initialize Zoltan!");
+        case ZOLTAN_OK+2:
+            OPM_THROW(std::runtime_error, "Could not create Zoltan!");
+        case ZOLTAN_OK+3:
+            OPM_THROW(std::runtime_error, "Partitioning with Zoltan failed!");
+        default:
+            OPM_THROW(std::runtime_error, "Unknown error reported by Zoltan!");
+        }
+    }
+
+    if (cc.rank() == root) {
+        // prepare exportedCells for communication
+        exportedCells = makeExportListsFromGIDtoRank(gIDtoRank, cc.size());
+        myImportList.reserve(exportedCells[root].size());
+        for (const auto& cell : exportedCells[root]) {
+            myImportList.emplace_back(cell, root, static_cast<char>(AttributeSet::owner), -1);
+        }
+        // exclude root's own cells from communication
+        exportedCells[root].resize(0);
+    }
+    // communicate and create import+export lists
+    auto importedCells = Opm::Impl::communicateExportedCells(exportedCells, cc, root);
+    if (cc.rank() == root) {
+        myExportList.reserve(grid.numCells());
+        for (int i = 0; i < grid.numCells(); ++i) {
+            myExportList.emplace_back(i, gIDtoRank[i], static_cast<char>(AttributeSet::owner));
+        }
+    } else {
+        myImportList.reserve(importedCells.size());
+        for (const auto& cell : importedCells) {
+            myImportList.emplace_back(cell, root, static_cast<char>(AttributeSet::owner), -1);
+        }
+    }
+
+    // get the distribution of wells
+    std::vector<std::pair<std::string, bool>> parallel_wells;
+    if (wells) {
+        if (allowDistributedWells) {
+            // wells can be split among several processes
+            auto wellsOnProc = Dune::cpgrid::perforatingWellIndicesOnProc(gIDtoRank, *wells, possibleFutureConnections, grid);
+            parallel_wells = Dune::cpgrid::computeParallelWells(wellsOnProc, *wells, cc, root);
+        } else {
+            // each well is guaranteed to be on a single process
+            auto wellRanks = getWellRanks(gIDtoRank, wellConnections);
+            parallel_wells = wellsOnThisRank(*wells, wellRanks, cc, root);
+        }
+    }
+
+    return std::make_tuple(std::move(gIDtoRank),
+                           std::move(parallel_wells),
+                           std::move(myExportList),
+                           std::move(myImportList),
+                           std::move(wellConnections));
+}
 #endif // HAVE_MPI
 
 // explicit template instantiations

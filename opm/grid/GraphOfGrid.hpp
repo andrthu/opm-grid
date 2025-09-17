@@ -28,6 +28,7 @@
 
 #include <opm/grid/CpGrid.hpp>
 
+
 namespace Opm {
 
 /// \brief A class storing a graph representation of the grid
@@ -51,6 +52,9 @@ class GraphOfGrid{
         EdgeList edges;
     };
 
+    using TransGraph = Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>;
+    using Row = typename TransGraph::row_type;
+
 public:
     explicit GraphOfGrid (const Grid& grid_,
                           const double* transmissibilities=nullptr,
@@ -59,6 +63,16 @@ public:
         : grid(grid_)
     {
         createGraph(transmissibilities,edgeWeightMethod, level);
+    }
+
+    explicit GraphOfGrid (const Grid& grid_,
+                          const double* transmissibilities,
+                          const Dune::EdgeWeightMethod edgeWeightMethod,
+                          int level, TransGraph* tg,
+                          double coarseThreshold)
+        : grid(grid_), transGraph(tg)
+    {
+        createCoarseGraph(transmissibilities,edgeWeightMethod, level, coarseThreshold);
     }
 
     const Grid& getGrid() const
@@ -188,6 +202,7 @@ private:
     void createGraph (const double* transmissibilities=nullptr,
                       const Dune::EdgeWeightMethod edgeWeightMethod=Dune::EdgeWeightMethod::defaultTransEdgeWgt,
                       int level = -1);
+    
 
     /// \brief Identify the well containing the cell with this global ID
     ///
@@ -210,9 +225,23 @@ private:
     /// \param well A set of cell indices representing a well to be contracted and added into 'wells'.
     void contractWellAndAdd(const std::set<int>& well);
 
+    
+    void dfs(Row row, int v, int master, double w, std::vector<bool>& visited,
+             std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges);
+    
+    void createCoarseGraph(const double* transmissibilities,
+                           const Dune::EdgeWeightMethod edgeWeightMethod,
+                           int level, double coarseThreshold);
+    
     const Grid& grid;
     std::unordered_map<int, VertexProperties> graph; // <gID, VertexProperties>
     std::list<std::set<int>> wells;
+
+    Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph;
+    std::vector<int> f2c;
+    std::vector<std::map<int, double> > cedges;
+    std::vector<std::vector<int>> coarseNodes;
+    
 };
 
 } // namespace Opm

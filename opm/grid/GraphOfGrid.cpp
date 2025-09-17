@@ -356,6 +356,86 @@ void GraphOfGrid<Grid>::addNeighboringCellsToWells ()
     }
 }
 
+template<typename Grid>
+void GraphOfGrid<Grid>::dfs(Row row, int v, int master, double w, std::vector<bool>& visited,
+                            std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges)
+{
+    visited[v] = true;
+	f2c[v] = master;
+	cnode.push_back(v);
+	
+	auto col = row.begin();
+	for (; col != row.end(); ++col) {
+	    int nab = col.index();
+        
+	    if ((*transGraph)[v][nab] > w) {
+            if (!visited[nab]) {
+                dfs((*transGraph)[nab],nab,master,w,visited,cnode,edges);
+            } else {
+                if (f2c[v]!=f2c[nab]) {
+                    std::cout << "Problem " << nab << " " << v <<
+                        " " << f2c[v] << " " << f2c[nab] <<std::endl; 
+                }
+            }
+	    }
+	}
+	col = row.begin();
+	for (; col != row.end(); ++col) {
+	    int nab = col.index();
+	    if (f2c[v]!=f2c[nab]) {
+            edges.push_back({v,nab,(*transGraph)[v][nab]});
+	    }
+	}
+}
+
+template<typename Grid>
+void GraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities,
+                                          const Dune::EdgeWeightMethod edgeWeightMethod,
+                                          int level, double coarseThreshold)
+{
+    int N = grid.size(0);
+    std::vector<bool> visited(N, false);
+    //std::vector<int> f2c;
+    f2c.resize(N, 0);
+    std::vector<int> c2f;
+
+    std::vector<std::vector<std::tuple<int,int,double> >> gEdges;
+
+    int newV = 0;
+
+    
+
+    for (int v = 0; v < N; ++v) {
+
+        if (!visited[v]) {
+
+            c2f.push_back(v);
+            std::vector<int> cnode;
+            std::vector<std::tuple<int,int,double> > edges;
+            dfs((*transGraph)[v],v,newV,coarseThreshold,visited,cnode,edges);
+            newV++;
+            gEdges.push_back(edges);
+            coarseNodes.push_back(cnode);
+        }
+
+    }
+
+    //std::vector<std::map<int, double> > cedges;
+    for (std::vector<std::tuple<int,int,double> > es : gEdges ) {
+        std::map<int, double> ce;
+        for (std::tuple<int,int,double> fe : es) {
+            int coarseNab = f2c[std::get<1>(fe)];
+            double weight = edgeWeightMethod == 0 ? 1.0 : std::get<2>(fe);
+            if ( ce.count(coarseNab) == 1 ) {
+                ce[coarseNab] += weight;
+            } else {
+                ce.insert({coarseNab,weight});
+            }
+        }
+        
+    }
+}
+    
 template class GraphOfGrid<Dune::CpGrid>;
 
 } // namespace Opm

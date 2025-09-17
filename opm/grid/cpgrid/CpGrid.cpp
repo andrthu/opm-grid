@@ -221,7 +221,9 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
                     double imbalanceTol,
                     [[maybe_unused]] bool allowDistributedWells,
                     [[maybe_unused]] const std::vector<int>& input_cell_part,
-                    int level)
+                    int level,
+		    [[maybe_unused]] Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph,
+		    [[maybe_unused]] double coarseThreshold)
 {
     // Silence any unused argument warnings that could occur with various configurations.
     static_cast<void>(wells);
@@ -230,6 +232,8 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
     static_cast<void>(method);
     static_cast<void>(imbalanceTol);
     static_cast<void>(level);
+    static_cast<void>(transGraph);
+    static_cast<void>(coarseThreshold);
 
     if(!distributed_data_.empty())
     {
@@ -384,7 +388,19 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
 #else
                 OPM_THROW(std::runtime_error, "Parallel runs depend on ZOLTAN if useZoltan is true. Please install!");
 #endif // HAVE_ZOLTAN
-            }
+            } else if (partitionMethod == Dune::PartitionMethod::zoltanCG)
+		
+	    {
+#ifdef HAVE_ZOLTAN
+                std::tie(computedCellPart, wells_on_proc, exportList, importList, wellConnections)
+                    = serialPartitioning
+                    ? cpgrid::zoltanSerialGraphPartitionGridOnRoot(*this, wells, possibleFutureConnections, transmissibilities, cc, method, 0, imbalanceTol, allowDistributedWells, partitioningParams)
+                    : cpgrid::zoltanGraphPartitionGridOnRoot(*this, wells, possibleFutureConnections, transmissibilities, cc, method, 0, imbalanceTol, allowDistributedWells, partitioningParams);
+#else
+                OPM_THROW(std::runtime_error, "Parallel runs depend on ZOLTAN if useZoltan is true. Please install!");
+#endif // HAVE_ZOLTAN
+	    }
+	    
             else
             {
                 std::tie(computedCellPart, wells_on_proc, exportList, importList, wellConnections) =
