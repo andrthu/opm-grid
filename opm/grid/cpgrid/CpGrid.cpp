@@ -389,19 +389,12 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
                 OPM_THROW(std::runtime_error, "Parallel runs depend on ZOLTAN if useZoltan is true. Please install!");
 #endif // HAVE_ZOLTAN
             } else if (partitionMethod == Dune::PartitionMethod::zoltanCG)
-		
 	    {
 #ifdef HAVE_ZOLTAN
-                std::tie(computedCellPart, wells_on_proc, exportList, importList, wellConnections)
-                    = serialPartitioning
-                    ? cpgrid::zoltanSerialGraphPartitionGridOnRoot(*this, wells, possibleFutureConnections, transmissibilities, cc, method, 0, imbalanceTol, allowDistributedWells, partitioningParams)
-                    : cpgrid::zoltanGraphPartitionGridOnRoot(*this, wells, possibleFutureConnections, transmissibilities, cc, method, 0, imbalanceTol, allowDistributedWells, partitioningParams);
-#else
-                OPM_THROW(std::runtime_error, "Parallel runs depend on ZOLTAN if useZoltan is true. Please install!");
+		std::tie(computedCellPart, wells_on_proc, exportList, importList, wellConnections)
+		    = Opm::zoltanSerialPartitioningWithCoarseGraph(*this, wells, possibleFutureConnections, transmissibilities, cc, method, 0, imbalanceTol, allowDistributedWells, partitioningParams, transGraph, coarseThreshold);
 #endif // HAVE_ZOLTAN
-	    }
-	    
-            else
+	    } else
             {
                 std::tie(computedCellPart, wells_on_proc, exportList, importList, wellConnections) =
                     cpgrid::vanillaPartitionGridOnRoot(*this, wells, possibleFutureConnections, transmissibilities, allowDistributedWells);

@@ -86,6 +86,21 @@ public:
         return graph.size();
     }
 
+    int cSize() const
+    {
+        return coarseNodes.size();
+    }
+
+    std::vector<std::vector<int>> getCoarseNodes() const
+    {
+        return coarseNodes;
+    }
+
+    std::vector<std::map<int, double> > getCoarseEdges() const
+    {
+        return cedges;
+    }
+
     auto begin() const
     {
         return graph.begin();

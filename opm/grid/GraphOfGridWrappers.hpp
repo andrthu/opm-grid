@@ -98,6 +98,63 @@ template<typename Zoltan_Struct>
 void setGraphOfGridZoltanGraphFunctions(Zoltan_Struct *zz,
                                         GraphOfGrid<Dune::CpGrid>& gog,
                                         bool pretendNull);
+
+/// \brief callback function for ZOLTAN_NUM_OBJ_FN
+///
+/// returns the number of vertices in the graph
+int getCoarseGraphNumVertices(void* pGraph, int *err);
+
+/// \brief callback function for ZOLTAN_OBJ_LIST_FN
+///
+/// fills the vector gIDs with vertex global IDs
+///  and the vector objWeights with their weights
+void getCoarseGraphVerticesList(void* pGraph,
+               [[maybe_unused]] int dimGlobalID,
+               [[maybe_unused]] int dimLocalID,
+                                ZOLTAN_ID_PTR gIDs,
+               [[maybe_unused]] ZOLTAN_ID_PTR lIDs,
+                                int weightDim,
+                                float *objWeights,
+                                int *err);
+
+/// \brief callback function for ZOLTAN_NUM_EDGES_MULTI_FN
+///
+/// takes the list of global IDs (gIDs) and fills (consecutively)
+/// vector numEdges with the number of their edges
+void getCoarseGraphNumEdges(void *pGraph,
+           [[maybe_unused]] int dimGlobalID,
+           [[maybe_unused]] int dimLocalID,
+                            int numCells,
+                            ZOLTAN_ID_PTR gIDs,
+           [[maybe_unused]] ZOLTAN_ID_PTR lIDs,
+                            int *numEdges,
+                            int *err);
+
+/// \brief callback function for ZOLTAN_EDGE_LIST_MULTI_FN
+///
+/// takes the list of global IDs (gIDs) and fills (consecutively):
+/// vector nborGIDs with the list of neighbors (all into 1 vector),
+/// vector nborProc with neighbors' process numbers,
+/// vector edgeWeights with edge weights.
+/// The vector numEdges provides the number of edges for each gID
+void getCoarseGraphEdgeList(void *pGraph,
+           [[maybe_unused]] int dimGlobalID,
+           [[maybe_unused]] int dimLocalID,
+                            int numCells,
+                            ZOLTAN_ID_PTR gIDs,
+           [[maybe_unused]] ZOLTAN_ID_PTR lIDs,
+                            int *numEdges,
+                            ZOLTAN_ID_PTR nborGIDs,
+                            int *nborProc,
+                            int weightDim,
+                            float *edgeWeights,
+                            int *err);
+
+/// \brief Register callback functions to Zoltan
+template<typename Zoltan_Struct>
+void setCoarseGraphZoltanGraphFunctions(Zoltan_Struct *zz,
+                                        GraphOfGrid<Dune::CpGrid>& gog,
+                                        bool pretendNull);
 #endif
 
 /// \brief Adds well to the GraphOfGrid
@@ -322,7 +379,8 @@ zoltanSerialPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
                                         const double zoltanImbalanceTol,
                                         bool allowDistributedWells,
                                         const std::map<std::string,std::string>& params,
-                                        Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph);
+                                        Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph,
+                                        double coarseThreshold);
 #endif // HAVE_MPI
 
 } // end namespace Opm
