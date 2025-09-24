@@ -101,6 +101,11 @@ public:
         return cedges;
     }
 
+    std::vector<int> getF2c() const
+    {
+        return f2c;
+    }
+
     auto begin() const
     {
         return graph.begin();
