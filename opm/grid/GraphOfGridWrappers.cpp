@@ -869,7 +869,8 @@ applySerialZoltanCG (const Dune::CpGrid& grid,
                      bool allowDistributedWells,
                      const std::map<std::string, std::string>& params,
                      Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph,
-                     double coarseThreshold)
+                     double coarseThreshold,
+                     int coarsePartitionMaxNodeSize)
 {
     int rc = ZOLTAN_OK;
     ZOLTAN_ID_PTR importGlobalGids, importLocalGids, exportGlobalGids, exportLocalGids;
@@ -901,7 +902,7 @@ applySerialZoltanCG (const Dune::CpGrid& grid,
     }
 
     // prepare graph and contract well cells
-    GraphOfGrid gog(grid, transmissibilities, edgeWeightMethod, layers, transGraph, coarseThreshold);
+    GraphOfGrid gog(grid, transmissibilities, edgeWeightMethod, transGraph, coarseThreshold, coarsePartitionMaxNodeSize);
     
 
     // call partitioner
@@ -1056,7 +1057,8 @@ zoltanSerialPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
                                         bool allowDistributedWells,
                                         const std::map<std::string, std::string>& params,
                                         Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph,
-                                        double coarseThreshold)
+                                        double coarseThreshold,
+                                        int coarsePartitionMaxNodeSize)
 {
     // root process has the whole grid, other ranks nothing
     bool partitionIsEmpty = cc.rank() != root;
@@ -1080,7 +1082,8 @@ zoltanSerialPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
                                                       allowDistributedWells,
                                                       params,
                                                       transGraph,
-                                                      coarseThreshold);
+                                                      coarseThreshold,
+                                                      coarsePartitionMaxNodeSize);
     }
 
     cc.broadcast(&rc, 1, root);

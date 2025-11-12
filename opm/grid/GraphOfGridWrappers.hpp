@@ -380,7 +380,8 @@ zoltanSerialPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
                                         bool allowDistributedWells,
                                         const std::map<std::string,std::string>& params,
                                         Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph,
-                                        double coarseThreshold);
+                                        double coarseThreshold,
+                                        int coarsePartitionMaxNodeSize);
 #endif // HAVE_MPI
 
 } // end namespace Opm

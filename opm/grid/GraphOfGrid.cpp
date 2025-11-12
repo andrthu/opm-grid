@@ -28,8 +28,10 @@
 
 #include <numeric>
 
+
 namespace Opm {
 
+    
 template<typename Grid>
 void GraphOfGrid<Grid>::createGraph (const double* transmissibilities,
                                      const Dune::EdgeWeightMethod edgeWeightMethod,
@@ -391,7 +393,7 @@ void GraphOfGrid<Grid>::dfs(Row row, int v, int master, double w, std::vector<bo
 template<typename Grid>
 void GraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities,
                                           const Dune::EdgeWeightMethod edgeWeightMethod,
-                                          int level, double coarseThreshold)
+                                          double coarseThreshold)
 {
     int N = grid.size(0);
     const auto& rank = grid.comm().rank();
@@ -420,7 +422,7 @@ void GraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities,
                 newV++;
                 gEdges.push_back(edges);
                 coarseNodes.push_back(cnode);
-                if (cnode.size() > biggest)
+                if ((int)cnode.size() > biggest)
                     biggest = cnode.size();
             }
         }
@@ -430,11 +432,124 @@ void GraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities,
             std::map<int, double> ce;
             for (std::tuple<int,int,double> fe : es) {
                 int coarseNab = f2c[std::get<1>(fe)];
-                double weight = edgeWeightMethod == 0 ? 1.0 : std::get<2>(fe);
-                if ( ce.count(coarseNab) == 1 ) {
-                    ce[coarseNab] += weight;
-                } else {
-                    ce.insert({coarseNab,weight});
+                double transVal = std::get<2>(fe);
+                double weight = edgeWeightMethod == 0 ? 1.0 : transVal;
+                if (transVal > 0) {
+                    if ( ce.count(coarseNab) == 1 ) {
+                        ce[coarseNab] += weight;
+                    } else {
+                        ce.insert({coarseNab,weight});
+                    }
+                }
+            }
+            cedges.push_back(ce);
+        }
+        std::cout << "Coarse graph size edges " << gEdges.size() << std::endl;
+    }
+}
+
+template<typename Grid>
+void GraphOfGrid<Grid>::dfsq(Row row, std::priority_queue<WgtIdx> &q, int v, int master,
+                             double w, int maxNode, std::vector<bool>& visited,
+                             std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges)
+{
+    visited[v] = true;
+	f2c[v] = master;
+	cnode.push_back(v);
+	
+	auto col = row.begin();
+	for (; col != row.end(); ++col) {
+	    int nab = col.index();
+        double wgt = (*transGraph)[v][nab];
+	    if ( wgt > w) {
+            if (!visited[nab]) {
+                q.push({wgt, nab});
+                //dfsq((*transGraph)[nab],q,nab,master,w,maxNode,visited,cnode,edges);
+            } 
+	    }
+	}
+
+    if ( (int)cnode.size() < maxNode ) {
+        if (!q.empty()) {
+
+            auto strongCon = q.top();
+            int nab = strongCon.idx;
+            q.pop();
+            while (visited[nab] && !q.empty()) {
+                strongCon = q.top();
+                nab = strongCon.idx;
+                q.pop();
+            }
+            if (!visited[nab])
+                dfsq((*transGraph)[nab],q,nab,master,w,maxNode,visited,cnode,edges);
+        }
+    } else {
+
+        q = std::priority_queue<WgtIdx>();
+    }
+
+	col = row.begin();
+	for (; col != row.end(); ++col) {
+	    int nab = col.index();
+	    if (f2c[v]!=f2c[nab]) {
+            edges.push_back({v,nab,(*transGraph)[v][nab]});
+	    }
+	}
+}
+
+template<typename Grid>
+void GraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities,
+                                          const Dune::EdgeWeightMethod edgeWeightMethod,
+                                          double coarseThreshold,
+                                          int coarsePartitionMaxNodeSize)
+{
+    int N = grid.size(0);
+    const auto& rank = grid.comm().rank();
+    if (rank == 0) {std::cout << "Start create coarse graph" << std::endl;}
+
+    
+    std::vector<bool> visited(N, false);
+    //std::vector<int> f2c;
+    f2c.resize(N, 0);
+    std::vector<int> c2f;
+    
+    std::vector<std::vector<std::tuple<int,int,double> >> gEdges;
+
+    int newV = 0;
+
+    int biggest = 0;
+    if (rank == 0) {
+        for (int v = 0; v < N; ++v) {
+
+            if (!visited[v]) {
+
+                std::priority_queue<WgtIdx> q;
+                c2f.push_back(v);
+                std::vector<int> cnode;
+                std::vector<std::tuple<int,int,double> > edges;
+                dfsq((*transGraph)[v],q,v,newV,coarseThreshold,
+                     coarsePartitionMaxNodeSize,visited,cnode,edges);
+                newV++;
+                gEdges.push_back(edges);
+                coarseNodes.push_back(cnode);
+                if ((int)cnode.size() > biggest)
+                    biggest = cnode.size();
+            }
+        }
+        std::cout << "Coarse maxNodeSize graph size " << coarseNodes.size() <<" "<< biggest << std::endl;
+        //std::vector<std::map<int, double> > cedges;
+        for (std::vector<std::tuple<int,int,double> > es : gEdges ) {
+            std::map<int, double> ce;
+            for (std::tuple<int,int,double> fe : es) {
+                int coarseNab = f2c[std::get<1>(fe)];
+                double transVal = std::get<2>(fe);
+                double weight = edgeWeightMethod == 0 ? 1.0 : transVal;
+                if (transVal > 0) {
+                    if ( ce.count(coarseNab) == 1 ) {
+                        ce[coarseNab] += weight;
+                    } else {
+                        ce.insert({coarseNab,weight});
+                    }
                 }
             }
             cedges.push_back(ce);

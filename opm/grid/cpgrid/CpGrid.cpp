@@ -223,7 +223,8 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
                     [[maybe_unused]] const std::vector<int>& input_cell_part,
                     int level,
 		    [[maybe_unused]] Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph,
-		    [[maybe_unused]] double coarseThreshold)
+		    [[maybe_unused]] double coarseThreshold,
+		    [[maybe_unused]] int coarsePartitionMaxNodeSize)
 {
     // Silence any unused argument warnings that could occur with various configurations.
     static_cast<void>(wells);
@@ -234,6 +235,7 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
     static_cast<void>(level);
     static_cast<void>(transGraph);
     static_cast<void>(coarseThreshold);
+    static_cast<void>(coarsePartitionMaxNodeSize);
 
     if(!distributed_data_.empty())
     {
@@ -392,7 +394,7 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
 	    {
 #ifdef HAVE_ZOLTAN
 		std::tie(computedCellPart, wells_on_proc, exportList, importList, wellConnections)
-		    = Opm::zoltanSerialPartitioningWithCoarseGraph(*this, wells, possibleFutureConnections, transmissibilities, cc, method, 0, imbalanceTol, allowDistributedWells, partitioningParams, transGraph, coarseThreshold);
+		    = Opm::zoltanSerialPartitioningWithCoarseGraph(*this, wells, possibleFutureConnections, transmissibilities, cc, method, 0, imbalanceTol, allowDistributedWells, partitioningParams, transGraph, coarseThreshold, coarsePartitionMaxNodeSize);
 #endif // HAVE_ZOLTAN
 	    } else
             {

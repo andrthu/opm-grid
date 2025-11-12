@@ -27,9 +27,19 @@
 #define OPM_GRAPH_OF_GRID_HEADER
 
 #include <opm/grid/CpGrid.hpp>
-
+#include <queue>
 
 namespace Opm {
+
+struct WgtIdx {
+
+    double wgt;
+    int idx;
+
+    bool operator<(const WgtIdx& other) const {
+	return wgt < other.wgt;
+    }
+};
 
 /// \brief A class storing a graph representation of the grid
 ///
@@ -68,11 +78,15 @@ public:
     explicit GraphOfGrid (const Grid& grid_,
                           const double* transmissibilities,
                           const Dune::EdgeWeightMethod edgeWeightMethod,
-                          int level, TransGraph* tg,
-                          double coarseThreshold)
+                          TransGraph* tg,
+                          double coarseThreshold,
+                          int coarsePartitionMaxNodeSize)
         : grid(grid_), transGraph(tg)
     {
-        createCoarseGraph(transmissibilities,edgeWeightMethod, level, coarseThreshold);
+        if (coarsePartitionMaxNodeSize == -1)
+            createCoarseGraph(transmissibilities,edgeWeightMethod, coarseThreshold);
+        else
+            createCoarseGraph(transmissibilities,edgeWeightMethod, coarseThreshold, coarsePartitionMaxNodeSize);
     }
 
     const Grid& getGrid() const
@@ -251,7 +265,18 @@ private:
     
     void createCoarseGraph(const double* transmissibilities,
                            const Dune::EdgeWeightMethod edgeWeightMethod,
-                           int level, double coarseThreshold);
+                           double coarseThreshold);
+
+
+    void dfsq(Row row, std::priority_queue<WgtIdx> &q, int v, int master,
+              double w, int maxNode, std::vector<bool>& visited,
+              std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges);
+    
+    void createCoarseGraph(const double* transmissibilities,
+                           const Dune::EdgeWeightMethod edgeWeightMethod,
+                           double coarseThreshold,
+                           int coarsePartitionMaxNodeSize);
+
     
     const Grid& grid;
     std::unordered_map<int, VertexProperties> graph; // <gID, VertexProperties>
