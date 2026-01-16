@@ -557,6 +557,69 @@ void GraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities,
         std::cout << "Coarse graph size edges " << gEdges.size() << std::endl;
     }
 }
+
+
+template<typename Grid>
+void GraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities,
+                                          const Dune::EdgeWeightMethod edgeWeightMethod,
+                                          double coarseThreshold,
+                                          int coarsePartitionMaxNodeSize,
+                                          const Dune::cpgrid::WellConnections& wells)
+{
+    int N = grid.size(0);
+    const auto& rank = grid.comm().rank();
+    if (rank == 0) {std::cout << "Start create coarse graph" << std::endl;}
+
+    
+    std::vector<bool> visited(N, false);
+    //std::vector<int> f2c;
+    f2c.resize(N, 0);
+    std::vector<int> c2f;
+    
+    std::vector<std::vector<std::tuple<int,int,double> >> gEdges;
+
+    int newV = 0;
+
+    int biggest = 0;
+    if (rank == 0) {
+        for (int v = 0; v < N; ++v) {
+
+            if (!visited[v]) {
+
+                std::priority_queue<WgtIdx> q;
+                c2f.push_back(v);
+                std::vector<int> cnode;
+                std::vector<std::tuple<int,int,double> > edges;
+                dfsq((*transGraph)[v],q,v,newV,coarseThreshold,
+                     coarsePartitionMaxNodeSize,visited,cnode,edges);
+                newV++;
+                gEdges.push_back(edges);
+                coarseNodes.push_back(cnode);
+                if ((int)cnode.size() > biggest)
+                    biggest = cnode.size();
+            }
+        }
+        std::cout << "Coarse maxNodeSize graph size " << coarseNodes.size() <<" "<< biggest << std::endl;
+        //std::vector<std::map<int, double> > cedges;
+        for (std::vector<std::tuple<int,int,double> > es : gEdges ) {
+            std::map<int, double> ce;
+            for (std::tuple<int,int,double> fe : es) {
+                int coarseNab = f2c[std::get<1>(fe)];
+                double transVal = std::get<2>(fe);
+                double weight = edgeWeightMethod == 0 ? 1.0 : transVal;
+                if (transVal > 0) {
+                    if ( ce.count(coarseNab) == 1 ) {
+                        ce[coarseNab] += weight;
+                    } else {
+                        ce.insert({coarseNab,weight});
+                    }
+                }
+            }
+            cedges.push_back(ce);
+        }
+        std::cout << "Coarse graph size edges " << gEdges.size() << std::endl;
+    }
+}
     
 template class GraphOfGrid<Dune::CpGrid>;
 

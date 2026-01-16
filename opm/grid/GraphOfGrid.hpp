@@ -72,7 +72,7 @@ public:
                           int level = -1)
         : grid(grid_)
     {
-        createGraph(transmissibilities,edgeWeightMethod, level);
+        createGraph(transmissibilities, edgeWeightMethod, level);
     }
 
     explicit GraphOfGrid (const Grid& grid_,
