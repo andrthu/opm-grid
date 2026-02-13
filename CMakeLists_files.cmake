@@ -50,6 +50,7 @@ list (APPEND MAIN_SOURCE_FILES
   opm/grid/ColumnExtract.cpp
   opm/grid/FaceQuadrature.cpp
   opm/grid/GraphOfGrid.cpp
+	opm/grid/CoarseGraphOfGrid.cpp
   opm/grid/GraphOfGridWrappers.cpp
   opm/grid/GridHelpers.cpp
   opm/grid/GridManager.cpp
@@ -249,6 +250,7 @@ list (APPEND PUBLIC_HEADER_FILES
   opm/grid/ColumnExtract.hpp
   opm/grid/FaceQuadrature.hpp
   opm/grid/GraphOfGrid.hpp
+	opm/grid/CoarseGraphOfGrid.hpp
   opm/grid/GraphOfGridWrappers.hpp
   opm/grid/GridHelpers.hpp
   opm/grid/GridManager.hpp

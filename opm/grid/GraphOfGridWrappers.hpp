@@ -30,6 +30,7 @@
 
 #include <opm/common/OpmLog/OpmLog.hpp>
 #include <opm/grid/GraphOfGrid.hpp>
+#include <opm/grid/CoarseGraphOfGrid.hpp>
 #include <opm/grid/common/WellConnections.hpp>
 #include <opm/grid/common/ZoltanGraphFunctions.hpp> // defines Zoltan and null-callback-functions
 
@@ -153,7 +154,7 @@ void getCoarseGraphEdgeList(void *pGraph,
 /// \brief Register callback functions to Zoltan
 template<typename Zoltan_Struct>
 void setCoarseGraphZoltanGraphFunctions(Zoltan_Struct *zz,
-                                        GraphOfGrid<Dune::CpGrid>& gog,
+                                        CoarseGraphOfGrid<Dune::CpGrid>& gog,
                                         bool pretendNull);
 #endif
 

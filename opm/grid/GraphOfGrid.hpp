@@ -27,6 +27,7 @@
 #define OPM_GRAPH_OF_GRID_HEADER
 
 #include <opm/grid/CpGrid.hpp>
+#include <opm/grid/common/WellConnections.hpp>
 #include <queue>
 
 namespace Opm {
@@ -74,7 +75,7 @@ public:
     {
         createGraph(transmissibilities, edgeWeightMethod, level);
     }
-
+    /*
     explicit GraphOfGrid (const Grid& grid_,
                           const double* transmissibilities,
                           const Dune::EdgeWeightMethod edgeWeightMethod,
@@ -84,9 +85,35 @@ public:
         : grid(grid_), transGraph(tg)
     {
         if (coarsePartitionMaxNodeSize == -1)
-            createCoarseGraph(transmissibilities,edgeWeightMethod, coarseThreshold);
+            createCoarseGraph(transmissibilities, edgeWeightMethod, coarseThreshold);
         else
-            createCoarseGraph(transmissibilities,edgeWeightMethod, coarseThreshold, coarsePartitionMaxNodeSize);
+            createCoarseGraph(transmissibilities, edgeWeightMethod, coarseThreshold, coarsePartitionMaxNodeSize);
+    }
+    */
+    explicit GraphOfGrid (const Grid& grid_,
+                          const double* transmissibilities,
+                          const Dune::EdgeWeightMethod edgeWeightMethod,
+                          TransGraph* tg,
+                          double coarseThreshold,
+                          int coarsePartitionMaxNodeSize,
+                          bool allowDistributedWells,
+                          const Dune::cpgrid::WellConnections& wellConn)
+        : grid(grid_), transGraph(tg)
+    {
+        if (allowDistributedWells) {
+            if (coarsePartitionMaxNodeSize == -1)
+                createCoarseGraph(transmissibilities, edgeWeightMethod, coarseThreshold);
+            else
+                createCoarseGraph(transmissibilities, edgeWeightMethod, coarseThreshold, coarsePartitionMaxNodeSize);
+        }
+        else {
+            if (coarsePartitionMaxNodeSize == -1) {
+                std::cout << "Merging wells only supported with coarsePartitionMaxNodeSize!=-1" << std::endl; 
+                createCoarseGraph(transmissibilities, edgeWeightMethod, coarseThreshold);
+            }
+            else
+                createCoarseGraph(transmissibilities, edgeWeightMethod, coarseThreshold, coarsePartitionMaxNodeSize, wellConn);
+        }
     }
 
     const Grid& getGrid() const
@@ -259,25 +286,37 @@ private:
     /// \param well A set of cell indices representing a well to be contracted and added into 'wells'.
     void contractWellAndAdd(const std::set<int>& well);
 
-    
     void dfs(Row row, int v, int master, double w, std::vector<bool>& visited,
              std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges);
-    
+
     void createCoarseGraph(const double* transmissibilities,
                            const Dune::EdgeWeightMethod edgeWeightMethod,
                            double coarseThreshold);
 
-
     void dfsq(Row row, std::priority_queue<WgtIdx> &q, int v, int master,
               double w, int maxNode, std::vector<bool>& visited,
               std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges);
-    
+
     void createCoarseGraph(const double* transmissibilities,
                            const Dune::EdgeWeightMethod edgeWeightMethod,
                            double coarseThreshold,
                            int coarsePartitionMaxNodeSize);
 
-    
+    void mergeWellCellsForCoarseGraph(std::vector<int>& hasWell,
+                                      std::vector<std::vector<int>>& wellPerf,
+                                      const Dune::cpgrid::WellConnections& wells);
+
+    void dfsqw(Row row, std::priority_queue<WgtIdx> &q, int v, int master,
+               double w, int maxNode, std::vector<bool>& visited,
+               std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges,
+               std::vector<int>& hasWell, std::vector<std::vector<int>>& wellPerf);
+
+    void createCoarseGraph(const double* transmissibilities,
+                           const Dune::EdgeWeightMethod edgeWeightMethod,
+                           double coarseThreshold,
+                           int coarsePartitionMaxNodeSize,
+                           const Dune::cpgrid::WellConnections& wells);
+
     const Grid& grid;
     std::unordered_map<int, VertexProperties> graph; // <gID, VertexProperties>
     std::list<std::set<int>> wells;
