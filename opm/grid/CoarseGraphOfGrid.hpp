@@ -23,8 +23,8 @@
   copyright holders.
 */
 
-#ifndef OPM_GRAPH_OF_GRID_HEADER
-#define OPM_GRAPH_OF_GRID_HEADER
+#ifndef OPM_COARSE_GRAPH_OF_GRID_HEADER
+#define OPM_COARSE_GRAPH_OF_GRID_HEADER
 
 #include <opm/grid/CpGrid.hpp>
 #include <opm/grid/common/WellConnections.hpp>
@@ -32,12 +32,12 @@
 
 namespace Opm {
 
-struct WgtIdx {
+struct WgtIdx2 {
 
     double wgt;
     int idx;
 
-    bool operator<(const WgtIdx& other) const {
+    bool operator<(const WgtIdx2& other) const {
 	return wgt < other.wgt;
     }
 };
@@ -132,7 +132,7 @@ private:
                            const Dune::EdgeWeightMethod edgeWeightMethod,
                            double coarseThreshold);
 
-    void dfsq(Row row, std::priority_queue<WgtIdx> &q, int v, int master,
+    void dfsq(Row row, std::priority_queue<WgtIdx2> &q, int v, int master,
               double w, int maxNode, std::vector<bool>& visited,
               std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges);
 
@@ -145,7 +145,7 @@ private:
                                       std::vector<std::vector<int>>& wellPerf,
                                       const Dune::cpgrid::WellConnections& wells);
 
-    void dfsqw(Row row, std::priority_queue<WgtIdx> &q, int v, int master,
+    void dfsqw(Row row, std::priority_queue<WgtIdx2> &q, int v, int master,
                double w, int maxNode, std::vector<bool>& visited,
                std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges,
                std::vector<int>& hasWell, std::vector<std::vector<int>>& wellPerf);
@@ -168,4 +168,4 @@ private:
 
 } // namespace Opm
 
-#endif // OPM_GRAPH_OF_GRID_HEADER
+#endif // OPM_COARSE_GRAPH_OF_GRID_HEADER

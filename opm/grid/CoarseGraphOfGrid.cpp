@@ -122,7 +122,7 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
 }
 
 template<typename Grid>
-void CoarseGraphOfGrid<Grid>::dfsq(Row row, std::priority_queue<WgtIdx> &q, int v, int master,
+void CoarseGraphOfGrid<Grid>::dfsq(Row row, std::priority_queue<WgtIdx2> &q, int v, int master,
                              double w, int maxNode, std::vector<bool>& visited,
                              std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges)
 {
@@ -158,7 +158,7 @@ void CoarseGraphOfGrid<Grid>::dfsq(Row row, std::priority_queue<WgtIdx> &q, int 
         }
     } else {
 
-        q = std::priority_queue<WgtIdx>();
+        q = std::priority_queue<WgtIdx2>();
     }
 
 	col = row.begin();
@@ -196,7 +196,7 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
 
             if (!visited[v]) {
 
-                std::priority_queue<WgtIdx> q;
+                std::priority_queue<WgtIdx2> q;
                 c2f.push_back(v);
                 std::vector<int> cnode;
                 std::vector<std::tuple<int,int,double> > edges;
@@ -268,7 +268,7 @@ void CoarseGraphOfGrid<Grid>::mergeWellCellsForCoarseGraph(std::vector<int>& has
 }
 
 template<typename Grid>
-void CoarseGraphOfGrid<Grid>::dfsqw(Row row, std::priority_queue<WgtIdx> &q, int v, int master,
+void CoarseGraphOfGrid<Grid>::dfsqw(Row row, std::priority_queue<WgtIdx2> &q, int v, int master,
                               double w, int maxNode, std::vector<bool>& visited,
                               std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges,
                               std::vector<int>& hasWell, std::vector<std::vector<int>>& wellPerf)
@@ -330,7 +330,7 @@ void CoarseGraphOfGrid<Grid>::dfsqw(Row row, std::priority_queue<WgtIdx> &q, int
         }
     } else {
 
-        q = std::priority_queue<WgtIdx>();
+        q = std::priority_queue<WgtIdx2>();
     }
 
 	auto col = row.begin();
@@ -372,7 +372,7 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
 
             if (!visited[v]) {
 
-                std::priority_queue<WgtIdx> q;
+                std::priority_queue<WgtIdx2> q;
                 c2f.push_back(v);
                 std::vector<int> cnode;
                 std::vector<std::tuple<int,int,double> > edges;
