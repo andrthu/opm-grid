@@ -313,6 +313,24 @@ makeImportAndExportLists(const GraphOfGrid<Dune::CpGrid>& gog,
                          const Id* importGlobalGids,
                          int level);
 
+
+template<class Id>
+std::tuple<std::vector<int>,
+           std::vector<std::pair<std::string, bool>>,
+           std::vector<std::tuple<int,int,char> >,
+           std::vector<std::tuple<int,int,char,int> > >
+makeImportAndExportLists(const CoarseGraphOfGrid<Dune::CpGrid>& gog,
+                         const Dune::Communication<MPI_Comm>& cc,
+                         const std::vector<Dune::cpgrid::OpmWellType> * wells,
+                         const Dune::cpgrid::WellConnections& wellConnections,
+                         int root,
+                         int numExport,
+                         int numImport,
+        [[maybe_unused]] const Id* exportLocalGids,
+                         const Id* exportGlobalGids,
+                         const int* exportToPart,
+                         const Id* importGlobalGids);
+
 /// \brief Call Zoltan partitioner on GraphOfGrid
 ///
 /// GraphOfGrid represents a well by one vertex, so wells can not be
@@ -332,6 +350,26 @@ zoltanPartitioningWithGraphOfGrid(const Dune::CpGrid& grid,
                                   bool allowDistributedWells,
                                   const std::map<std::string,std::string>& params,
                                   int level);
+
+/// \brief Call Zoltan partitioner on Coarsened graph
+///
+/// 
+std::tuple<std::vector<int>, std::vector<std::pair<std::string, bool>>,
+           std::vector<std::tuple<int,int,char> >,
+           std::vector<std::tuple<int,int,char,int> >,
+           Dune::cpgrid::WellConnections>
+zoltanPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
+                                  const std::vector<Dune::cpgrid::OpmWellType> * wells,
+                                  const std::unordered_map<std::string, std::set<int>>& possibleFutureConnections,
+                                  const Dune::cpgrid::CpGridDataTraits::Communication& cc,
+                                  Dune::EdgeWeightMethod edgeWeightMethod,
+                                  int root,
+                                  const double zoltanImbalanceTol,
+                                  bool allowDistributedWells,
+                                  const std::map<std::string,std::string>& params,
+                                  Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph,
+                                  double coarseThreshold,
+                                  int coarsePartitionMaxNodeSize);
 
 /// \brief Make complete export lists from a vector holding destination rank for each global ID
 ///
@@ -373,7 +411,6 @@ std::tuple<std::vector<int>, std::vector<std::pair<std::string, bool>>,
 zoltanSerialPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
                                         const std::vector<Dune::cpgrid::OpmWellType> * wells,
                                         const std::unordered_map<std::string, std::set<int>>& possibleFutureConnections,
-                                        const double* transmissibilities,
                                         const Dune::cpgrid::CpGridDataTraits::Communication& cc,
                                         Dune::EdgeWeightMethod edgeWeightMethod,
                                         int root,

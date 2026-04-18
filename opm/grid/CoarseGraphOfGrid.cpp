@@ -33,40 +33,39 @@ namespace Opm {
 
 template<typename Grid>
 void CoarseGraphOfGrid<Grid>::dfs(Row row, int v, int master, double w, std::vector<bool>& visited,
-                            std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges)
+                                  std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges)
 {
     visited[v] = true;
-	f2c[v] = master;
-	cnode.push_back(v);
-	
-	auto col = row.begin();
-	for (; col != row.end(); ++col) {
-	    int nab = col.index();
-        
-	    if ((*transGraph)[v][nab] > w) {
+    map_to_coarse_[v] = master;
+    cnode.push_back(v);
+
+    //loop over all neighbours of vertex v
+    auto col = row.begin();
+    for (; col != row.end(); ++col) {
+        int nab = col.index();
+
+        // If transmissibility between v and nab is larger than threshold
+        // call dps on nab vertex
+        if ((*transGraph)[v][nab] > w) {
             if (!visited[nab]) {
                 dfs((*transGraph)[nab],nab,master,w,visited,cnode,edges);
-            } else {
-                if (f2c[v]!=f2c[nab]) {
-                    std::cout << "Problem " << nab << " " << v <<
-                        " " << f2c[v] << " " << f2c[nab] <<std::endl; 
-                }
             }
-	    }
-	}
-	col = row.begin();
-	for (; col != row.end(); ++col) {
-	    int nab = col.index();
-	    if (f2c[v]!=f2c[nab]) {
-            edges.push_back({v,nab,(*transGraph)[v][nab]});
-	    }
-	}
-}
+        }
+    }
 
+    // Add connection between v and nab if v and nab are not merged  
+    col = row.begin();
+    for (; col != row.end(); ++col) {
+        int nab = col.index();
+        if (map_to_coarse_[v]!=map_to_coarse_[nab]) {
+            edges.push_back({v,nab,(*transGraph)[v][nab]});
+        }
+    }
+}
+/*
 template<typename Grid>
-void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities,
-                                          const Dune::EdgeWeightMethod edgeWeightMethod,
-                                          double coarseThreshold)
+void CoarseGraphOfGrid<Grid>::createCoarseGraph(const Dune::EdgeWeightMethod edgeWeightMethod,
+                                                double coarseThreshold)
 {
     int N = grid.size(0);
     const auto& rank = grid.comm().rank();
@@ -74,8 +73,8 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
 
     
     std::vector<bool> visited(N, false);
-    //std::vector<int> f2c;
-    f2c.resize(N, 0);
+    //std::vector<int> map_to_coarse_;
+    map_to_coarse_.resize(N, 0);
     std::vector<int> c2f;
     
     std::vector<std::vector<std::tuple<int,int,double> >> gEdges;
@@ -100,11 +99,11 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
             }
         }
         std::cout << "Coarse graph size " << coarseNodes.size() <<" "<< biggest << std::endl;
-        //std::vector<std::map<int, double> > cedges;
+
         for (std::vector<std::tuple<int,int,double> > es : gEdges ) {
             std::map<int, double> ce;
             for (std::tuple<int,int,double> fe : es) {
-                int coarseNab = f2c[std::get<1>(fe)];
+                int coarseNab = map_to_coarse_[std::get<1>(fe)];
                 double transVal = std::get<2>(fe);
                 double weight = edgeWeightMethod == 0 ? 1.0 : transVal;
                 if (transVal > 0) {
@@ -120,31 +119,33 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
         std::cout << "Coarse graph size edges " << gEdges.size() << std::endl;
     }
 }
-
+*/
 template<typename Grid>
 void CoarseGraphOfGrid<Grid>::dfsq(Row row, std::priority_queue<WgtIdx2> &q, int v, int master,
-                             double w, int maxNode, std::vector<bool>& visited,
-                             std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges)
+                                   double w, int maxNode, std::vector<bool>& visited,
+                                   std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges)
 {
     visited[v] = true;
-	f2c[v] = master;
-	cnode.push_back(v);
-	
-	auto col = row.begin();
-	for (; col != row.end(); ++col) {
-	    int nab = col.index();
+    map_to_coarse_[v] = master;
+    cnode.push_back(v);
+
+    // Add all neighboring vertices of v with transmissibility larger than w to the queue. 
+    auto col = row.begin();
+    for (; col != row.end(); ++col) {
+        int nab = col.index();
         double wgt = (*transGraph)[v][nab];
-	    if ( wgt > w) {
+        if ( wgt > w) {
             if (!visited[nab]) {
                 q.push({wgt, nab});
-                //dfsq((*transGraph)[nab],q,nab,master,w,maxNode,visited,cnode,edges);
             } 
-	    }
-	}
+        }
+    }
 
+    // Only merge more vertices if the current coarse node is smaller than maxNode.
     if ( (int)cnode.size() < maxNode ) {
         if (!q.empty()) {
 
+            // Find strongest connection in queue q not already merged to cnode.
             auto strongCon = q.top();
             int nab = strongCon.idx;
             q.pop();
@@ -153,28 +154,29 @@ void CoarseGraphOfGrid<Grid>::dfsq(Row row, std::priority_queue<WgtIdx2> &q, int
                 nab = strongCon.idx;
                 q.pop();
             }
+            // Call dfsq reflexively on strongest connection in queue
             if (!visited[nab])
                 dfsq((*transGraph)[nab],q,nab,master,w,maxNode,visited,cnode,edges);
         }
     } else {
-
         q = std::priority_queue<WgtIdx2>();
     }
 
-	col = row.begin();
-	for (; col != row.end(); ++col) {
-	    int nab = col.index();
-	    if (f2c[v]!=f2c[nab]) {
+    // Add connection between v and nab if v and nab are not merged
+    col = row.begin();
+    for (; col != row.end(); ++col) {
+        int nab = col.index();
+        if (map_to_coarse_[v]!=map_to_coarse_[nab]) {
             edges.push_back({v,nab,(*transGraph)[v][nab]});
-	    }
-	}
+        }
+    }
 }
 
+/*
 template<typename Grid>
-void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities,
-                                          const Dune::EdgeWeightMethod edgeWeightMethod,
-                                          double coarseThreshold,
-                                          int coarsePartitionMaxNodeSize)
+void CoarseGraphOfGrid<Grid>::createCoarseGraph(const Dune::EdgeWeightMethod edgeWeightMethod,
+                                                double coarseThreshold,
+                                                int coarsePartitionMaxNodeSize)
 {
     int N = grid.size(0);
     const auto& rank = grid.comm().rank();
@@ -182,8 +184,8 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
 
     
     std::vector<bool> visited(N, false);
-    //std::vector<int> f2c;
-    f2c.resize(N, 0);
+    //std::vector<int> map_to_coarse_;
+    map_to_coarse_.resize(N, 0);
     std::vector<int> c2f;
     
     std::vector<std::vector<std::tuple<int,int,double> >> gEdges;
@@ -214,7 +216,7 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
         for (std::vector<std::tuple<int,int,double> > es : gEdges ) {
             std::map<int, double> ce;
             for (std::tuple<int,int,double> fe : es) {
-                int coarseNab = f2c[std::get<1>(fe)];
+                int coarseNab = map_to_coarse_[std::get<1>(fe)];
                 double transVal = std::get<2>(fe);
                 double weight = edgeWeightMethod == 0 ? 1.0 : transVal;
                 if (transVal > 0) {
@@ -230,6 +232,7 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
         std::cout << "Coarse graph size edges " << gEdges.size() << std::endl;
     }
 }
+*/
 template<typename Grid>
 void CoarseGraphOfGrid<Grid>::mergeWellCellsForCoarseGraph(std::vector<int>& hasWell,
                                                      std::vector<std::vector<int>>& wellPerf,
@@ -275,7 +278,7 @@ void CoarseGraphOfGrid<Grid>::dfsqw(Row row, std::priority_queue<WgtIdx2> &q, in
 {
     if (hasWell[v] == -1) {
         visited[v] = true;
-        f2c[v] = master;
+        map_to_coarse_[v] = master;
         cnode.push_back(v);
         
         auto col = row.begin();
@@ -285,7 +288,6 @@ void CoarseGraphOfGrid<Grid>::dfsqw(Row row, std::priority_queue<WgtIdx2> &q, in
             if ( wgt > w) {
                 if (!visited[nab]) {
                     q.push({wgt, nab});
-                    //dfsq((*transGraph)[nab],q,nab,master,w,maxNode,visited,cnode,edges);
                 }
             }
         }
@@ -295,7 +297,7 @@ void CoarseGraphOfGrid<Grid>::dfsqw(Row row, std::priority_queue<WgtIdx2> &q, in
 
         for (const auto& idx : perfs) {
             visited[idx] = true;
-            f2c[idx] = master;
+            map_to_coarse_[idx] = master;
             cnode.push_back(idx);
         }
         for (const auto& idx : perfs) {
@@ -307,7 +309,6 @@ void CoarseGraphOfGrid<Grid>::dfsqw(Row row, std::priority_queue<WgtIdx2> &q, in
                 if ( wgt > w) {
                     if (!visited[nab]) {
                         q.push({wgt, nab});
-                        //dfsq((*transGraph)[nab],q,nab,master,w,maxNode,visited,cnode,edges);
                     }
                 }
             }
@@ -329,25 +330,24 @@ void CoarseGraphOfGrid<Grid>::dfsqw(Row row, std::priority_queue<WgtIdx2> &q, in
                 dfsqw((*transGraph)[nab],q,nab,master,w,maxNode,visited,cnode,edges,hasWell,wellPerf);
         }
     } else {
-
         q = std::priority_queue<WgtIdx2>();
     }
 
-	auto col = row.begin();
-	for (; col != row.end(); ++col) {
-	    int nab = col.index();
-	    if (f2c[v]!=f2c[nab]) {
+    auto col = row.begin();
+    for (; col != row.end(); ++col) {
+        int nab = col.index();
+        if (map_to_coarse_[v]!=map_to_coarse_[nab]) {
             edges.push_back({v,nab,(*transGraph)[v][nab]});
-	    }
-	}
+        }
+    }
 }
 
 template<typename Grid>
-void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities,
-                                          const Dune::EdgeWeightMethod edgeWeightMethod,
-                                          double coarseThreshold,
-                                          int coarsePartitionMaxNodeSize,
-                                          const Dune::cpgrid::WellConnections& wellConn)
+void CoarseGraphOfGrid<Grid>::createCoarseGraph(const Dune::EdgeWeightMethod edgeWeightMethod,
+                                                double coarseThreshold,
+                                                int coarsePartitionMaxNodeSize,
+                                                bool allowDistributedWells,
+                                                const Dune::cpgrid::WellConnections& wellConn)
 {
     int N = grid.size(0);
     const auto& rank = grid.comm().rank();
@@ -357,16 +357,23 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
     std::vector<bool> visited(N, false);
     std::vector<int> hasWell(N,-1);
     std::vector<std::vector<int>> wellPerf;
-    mergeWellCellsForCoarseGraph(hasWell, wellPerf, wellConn);
-    //std::vector<int> f2c;
-    f2c.resize(N, 0);
+    if (!allowDistributedWells) {
+        if (coarsePartitionMaxNodeSize != -1)
+            mergeWellCellsForCoarseGraph(hasWell, wellPerf, wellConn);
+        else {
+            if (rank == 0) {
+                std::cout << "Merging wells is only possible with --coarse-partition-max-node-size!=-1" << std::endl;
+            }
+        }
+    }
+    map_to_coarse_.resize(N, 0);
     std::vector<int> c2f;
 
     std::vector<std::vector<std::tuple<int,int,double> >> gEdges;
 
     int newV = 0;
-
     int biggest = 0;
+
     if (rank == 0) {
         for (int v = 0; v < N; ++v) {
 
@@ -376,9 +383,18 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
                 c2f.push_back(v);
                 std::vector<int> cnode;
                 std::vector<std::tuple<int,int,double> > edges;
-                dfsqw((*transGraph)[v],q,v,newV,coarseThreshold,
-                      coarsePartitionMaxNodeSize,visited,cnode,edges,
-                      hasWell, wellPerf);
+                if (coarsePartitionMaxNodeSize == -1) {
+                    dfs((*transGraph)[v],v,newV,coarseThreshold,visited,cnode,edges);
+                } else {
+                    if (allowDistributedWells) {
+                        dfsq((*transGraph)[v],q,v,newV,coarseThreshold,
+                             coarsePartitionMaxNodeSize,visited,cnode,edges);
+                    } else {
+                        dfsqw((*transGraph)[v],q,v,newV,coarseThreshold,
+                              coarsePartitionMaxNodeSize,visited,cnode,edges,
+                              hasWell, wellPerf);
+                    }
+                }
                 newV++;
                 gEdges.push_back(edges);
                 coarseNodes.push_back(cnode);
@@ -387,11 +403,11 @@ void CoarseGraphOfGrid<Grid>::createCoarseGraph(const double* transmissibilities
             }
         }
         std::cout << "Coarse maxNodeSize graph size " << coarseNodes.size() <<" "<< biggest << std::endl;
-        //std::vector<std::map<int, double> > cedges;
+
         for (std::vector<std::tuple<int,int,double> > es : gEdges ) {
             std::map<int, double> ce;
             for (std::tuple<int,int,double> fe : es) {
-                int coarseNab = f2c[std::get<1>(fe)];
+                int coarseNab = map_to_coarse_[std::get<1>(fe)];
                 double transVal = std::get<2>(fe);
                 double weight = edgeWeightMethod == 0 ? 1.0 : transVal;
                 if (transVal > 0) {

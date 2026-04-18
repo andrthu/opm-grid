@@ -38,19 +38,15 @@ struct WgtIdx2 {
     int idx;
 
     bool operator<(const WgtIdx2& other) const {
-	return wgt < other.wgt;
+    return wgt < other.wgt;
     }
 };
 
-/// \brief A class storing a graph representation of the grid
+/// \brief A class storing a Coarse graph representation of the grid
 ///
-/// Stores the list of all cell global IDs and for each cell
-/// a list of global IDs of its neighbors.
-/// In addition, weights of graph vertices and edges are stored.
-///
-/// Features edge contractions, which adds weights of merged vertices
-/// and of edges to every shared neighbor. Intended use is for loadbalancing
-/// to ensure that no well is split between processes.
+/// Similar to GraphOfGrid, but here nodes are merged if
+/// the transmissibility on the edge connecting them is below
+/// a certain threshold.
 template<typename Grid>
 class CoarseGraphOfGrid{
     using WeightType = float;
@@ -69,29 +65,16 @@ class CoarseGraphOfGrid{
 public:
 
     explicit CoarseGraphOfGrid (const Grid& grid_,
-                          const double* transmissibilities,
-                          const Dune::EdgeWeightMethod edgeWeightMethod,
-                          TransGraph* tg,
-                          double coarseThreshold,
-                          int coarsePartitionMaxNodeSize,
-                          bool allowDistributedWells,
-                          const Dune::cpgrid::WellConnections& wellConn)
+                                const Dune::EdgeWeightMethod edgeWeightMethod,
+                                TransGraph* tg,
+                                double coarseThreshold,
+                                int coarsePartitionMaxNodeSize,
+                                bool allowDistributedWells,
+                                const Dune::cpgrid::WellConnections& wellConn)
         : grid(grid_), transGraph(tg)
     {
-        if (allowDistributedWells) {
-            if (coarsePartitionMaxNodeSize == -1)
-                createCoarseGraph(transmissibilities, edgeWeightMethod, coarseThreshold);
-            else
-                createCoarseGraph(transmissibilities, edgeWeightMethod, coarseThreshold, coarsePartitionMaxNodeSize);
-        }
-        else {
-            if (coarsePartitionMaxNodeSize == -1) {
-                std::cout << "Merging wells only supported with coarsePartitionMaxNodeSize!=-1" << std::endl; 
-                createCoarseGraph(transmissibilities, edgeWeightMethod, coarseThreshold);
-            }
-            else
-                createCoarseGraph(transmissibilities, edgeWeightMethod, coarseThreshold, coarsePartitionMaxNodeSize, wellConn);
-        }
+        createCoarseGraph(edgeWeightMethod, coarseThreshold, coarsePartitionMaxNodeSize,
+                          allowDistributedWells, wellConn);
     }
 
     const Grid& getGrid() const
@@ -99,6 +82,7 @@ public:
         return grid;
     }
 
+    /// \brief Number of graph vertices
     int cSize() const
     {
         return coarseNodes.size();
@@ -114,9 +98,10 @@ public:
         return cedges;
     }
 
-    std::vector<int> getF2c() const
+    /// \brief returns map of global cell id to coarse vertex id
+    std::vector<int> getMapToCoarse() const
     {
-        return f2c;
+        return map_to_coarse_;
     }
 
     /// \brief Return the list of wells
@@ -125,42 +110,61 @@ public:
         return wells;
     }
 private:
+
+    /// \brief Coarsen the graph by doing a (d)epth (f)irst (s)earch 
     void dfs(Row row, int v, int master, double w, std::vector<bool>& visited,
              std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges);
 
-    void createCoarseGraph(const double* transmissibilities,
-                           const Dune::EdgeWeightMethod edgeWeightMethod,
+    /// \brief Create the coarse graph merging all vertices connected with a transmissibility
+    /// larger then coarseThreshold
+    /*
+    void createCoarseGraph(const Dune::EdgeWeightMethod edgeWeightMethod,
                            double coarseThreshold);
-
+    */
+    /// \brief Coarsen the graph by doing a (d)epth (f)irst (s)earch withe priority (q)ueue
+    ///
+    /// Similar to dps, but limits coarse node to size maxNode.
+    /// A priority queue is used to make sure the larges connections are prioritised in the
+    /// merging of vertices.
     void dfsq(Row row, std::priority_queue<WgtIdx2> &q, int v, int master,
               double w, int maxNode, std::vector<bool>& visited,
               std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges);
 
-    void createCoarseGraph(const double* transmissibilities,
-                           const Dune::EdgeWeightMethod edgeWeightMethod,
+    /// \brief
+    /*void createCoarseGraph(const Dune::EdgeWeightMethod edgeWeightMethod,
                            double coarseThreshold,
                            int coarsePartitionMaxNodeSize);
-
+    */
+    /// \brief Merge vertices that share a common well 
     void mergeWellCellsForCoarseGraph(std::vector<int>& hasWell,
                                       std::vector<std::vector<int>>& wellPerf,
                                       const Dune::cpgrid::WellConnections& wells);
 
+    /// \brief Coarsen the graph by doing a (d)epth (f)irst (s)earch
+    ///
+    /// Similar to dps, but limits coarse node to size maxNode and merges wells
     void dfsqw(Row row, std::priority_queue<WgtIdx2> &q, int v, int master,
                double w, int maxNode, std::vector<bool>& visited,
                std::vector<int>& cnode, std::vector<std::tuple<int,int,double> >& edges,
                std::vector<int>& hasWell, std::vector<std::vector<int>>& wellPerf);
 
-    void createCoarseGraph(const double* transmissibilities,
-                           const Dune::EdgeWeightMethod edgeWeightMethod,
+    /// \brief Create the coarse graph merging all vertices connected with a large transmissibility
+    ///
+    /// Creates a coarsened graph by merging vertices connected with a
+    /// transmissibility larger than coarseThreshold.
+    /// If coarsePartitionMaxNodeSize != -1 the coarse vertices will not be larger than coarsePartitionMaxNodeSize.
+    /// Also meges wells if allowDistributedWells == true.
+    void createCoarseGraph(const Dune::EdgeWeightMethod edgeWeightMethod,
                            double coarseThreshold,
                            int coarsePartitionMaxNodeSize,
+                           bool allowDistributedWells,
                            const Dune::cpgrid::WellConnections& wells);
 
     const Grid& grid;
     std::list<std::set<int>> wells;
 
     Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph;
-    std::vector<int> f2c;
+    std::vector<int> map_to_coarse_;
     std::vector<std::map<int, double> > cedges;
     std::vector<std::vector<int>> coarseNodes;
     
