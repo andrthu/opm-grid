@@ -400,6 +400,13 @@ CpGrid::scatterGrid(EdgeWeightMethod method,
 #else
 	OPM_THROW(std::runtime_error, "Parallel runs depend on ZOLTAN if useZoltan is true. Please install!");	
 #endif // HAVE_ZOLTAN
+	    } else if (partitionMethod == Dune::PartitionMethod::metisCG)
+	    {
+#ifdef HAVE_METIS
+		std::tie(computedCellPart, wells_on_proc, exportList, importList, wellConnections) = Opm::metisSerialPartitioningWithCoarseGraph(*this, wells, possibleFutureConnections, cc, method, 0, imbalanceTol, allowDistributedWells, partitioningParams, transGraph, coarseThreshold, coarsePartitionMaxNodeSize);
+#else
+		OPM_THROW(std::runtime_error, "Parallel runs depend on METIS if useMetis is true. Please install!");
+#endif // HAVE_METIS
 	    } else
             {
                 std::tie(computedCellPart, wells_on_proc, exportList, importList, wellConnections) =

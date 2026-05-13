@@ -51,7 +51,9 @@ namespace Dune {
         /// \brief use Zoltan on GraphOfGrid for partitioning
         zoltanGoG=3,
 	/// \brief Use Zoltan coarse graph
-	zoltanCG=4
+	zoltanCG=4,
+	/// \brief Use METIS with coarse graph for partitioning
+	metisCG=5
     };
 }
 

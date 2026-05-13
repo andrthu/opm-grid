@@ -28,6 +28,7 @@
 #include <opm/grid/common/CommunicationUtils.hpp>
 #include <opm/grid/common/ZoltanPartition.hpp> // function scatterExportInformation
 #include <opm/grid/common/ZoltanGraphFunctions.hpp> // makeImportAndExportLists when allowDistributedWells==true
+#include <metis.h>
 
 namespace Opm {
 
@@ -1445,6 +1446,138 @@ zoltanSerialPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
         // exclude root's own cells from communication
         exportedCells[root].resize(0);
     }
+    // communicate and create import+export lists
+    auto importedCells = Opm::Impl::communicateExportedCells(exportedCells, cc, root);
+    if (cc.rank() == root) {
+        myExportList.reserve(grid.numCells());
+        for (int i = 0; i < grid.numCells(); ++i) {
+            myExportList.emplace_back(i, gIDtoRank[i], static_cast<char>(AttributeSet::owner));
+        }
+    } else {
+        myImportList.reserve(importedCells.size());
+        for (const auto& cell : importedCells) {
+            myImportList.emplace_back(cell, root, static_cast<char>(AttributeSet::owner), -1);
+        }
+    }
+
+    // get the distribution of wells
+    std::vector<std::pair<std::string, bool>> parallel_wells;
+    if (wells) {
+        if (allowDistributedWells) {
+            // wells can be split among several processes
+            auto wellsOnProc = Dune::cpgrid::perforatingWellIndicesOnProc(gIDtoRank, *wells, possibleFutureConnections, grid);
+            parallel_wells = Dune::cpgrid::computeParallelWells(wellsOnProc, *wells, cc, root);
+        } else {
+            // each well is guaranteed to be on a single process
+            auto wellRanks = getWellRanks(gIDtoRank, wellConnections);
+            parallel_wells = wellsOnThisRank(*wells, wellRanks, cc, root);
+        }
+    }
+
+    return std::make_tuple(std::move(gIDtoRank),
+                           std::move(parallel_wells),
+                           std::move(myExportList),
+                           std::move(myImportList),
+                           std::move(wellConnections));
+}
+
+std::tuple<std::vector<int>,
+           std::vector<std::pair<std::string, bool>>,
+           std::vector<std::tuple<int,int,char> >,
+           std::vector<std::tuple<int,int,char,int> >,
+           Dune::cpgrid::WellConnections>
+metisSerialPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
+                                       const std::vector<Dune::cpgrid::OpmWellType> * wells,
+                                       const std::unordered_map<std::string, std::set<int>>& possibleFutureConnections,
+                                       const Dune::cpgrid::CpGridDataTraits::Communication& cc,
+                                       Dune::EdgeWeightMethod edgeWeightMethod,
+                                       int root,
+                                       const double zoltanImbalanceTol,
+                                       bool allowDistributedWells,
+                                       const std::map<std::string, std::string>& params,
+                                       Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph,
+                                       double coarseThreshold,
+                                       int coarsePartitionMaxNodeSize)
+{
+    // root process has the whole grid, other ranks nothing
+    bool partitionIsEmpty = cc.rank() != root;
+    int numPart = cc.size();
+    std::vector<int> gIDtoRank;
+    using AttributeSet = Dune::cpgrid::CpGridData::AttributeSet;
+    std::vector<std::tuple<int, int, char>> myExportList;
+    std::vector<std::tuple<int, int, char, int>> myImportList;
+    std::vector<std::vector<int>> exportedCells;
+    auto wellConnections = partitionIsEmpty || !wells ? Dune::cpgrid::WellConnections()
+                                                      : Dune::cpgrid::WellConnections(*wells, possibleFutureConnections, grid);
+
+    if (cc.rank() == root) {
+        CoarseGraphOfGrid cgog(grid, edgeWeightMethod, transGraph,
+                               coarseThreshold, coarsePartitionMaxNodeSize,
+                               allowDistributedWells, wellConnections);
+
+        std::vector<idx_t> xadj;
+        std::vector<idx_t> adjncy;
+        std::vector<idx_t> vwgt;
+        std::vector<idx_t> adjwgt;
+
+        //gog.cSize();
+        const std::vector<std::vector<int>> nodes = cgog.getCoarseNodes();
+        const std::vector<std::map<int, double> > edges = cgog.getCoarseEdges();
+
+        int n_nodes = nodes.size();
+
+        xadj.push_back(0);
+        for (int i = 0; i < n_nodes; ++i) {
+            // Add vertex weight
+            vwgt.push_back(nodes[i].size());
+            for (const auto& edge : edges[i]) {
+                adjncy.push_back(edge.first);
+                adjwgt.push_back(edge.second);
+            }
+            // Mark the end of this node's list in adjncy
+            xadj.push_back(adjncy.size());
+        }
+        // 2. METIS Parameters
+        idx_t nvtxs = n_nodes;     // Number of vertices
+        idx_t ncon = 1;            // Number of balancing constraints
+        idx_t nparts = numPart;    // Number of partitions you want
+        idx_t objval;              // Output: edge-cut value
+
+        std::vector<real_t> tpwgts(nparts * ncon);
+        for (int i = 0; i < nparts; ++i) {
+            tpwgts[i] = 1.0 / nparts;
+        }
+        std::vector<real_t> ubvec(ncon);
+        ubvec[0] = zoltanImbalanceTol;
+
+        // METIS options (0 sets defaults)
+        idx_t options[METIS_NOPTIONS];
+        METIS_SetDefaultOptions(options);
+        options[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_CUT;
+        options[METIS_OPTION_NUMBERING] = 0;
+
+        std::vector<int> coarseRank(n_nodes, root);
+        // 3. Call METIS
+        int result = METIS_PartGraphKway(&nvtxs, &ncon, xadj.data(), adjncy.data(),
+                                         vwgt.data(), NULL, adjwgt.data(), &nparts, tpwgts.data(),
+                                         ubvec.data(), options, &objval, coarseRank.data());
+
+        gIDtoRank.resize(grid.numCells(), root);
+
+        const std::vector<int> m2c = cgog.getMapToCoarse();
+        for (int i = 0; i < grid.numCells(); ++i) {
+            gIDtoRank[i] = coarseRank[m2c[i]];
+        }
+
+        exportedCells = makeExportListsFromGIDtoRank(gIDtoRank, cc.size());
+        myImportList.reserve(exportedCells[root].size());
+        for (const auto& cell : exportedCells[root]) {
+            myImportList.emplace_back(cell, root, static_cast<char>(AttributeSet::owner), -1);
+        }
+        // exclude root's own cells from communication
+        exportedCells[root].resize(0);
+    }
+
     // communicate and create import+export lists
     auto importedCells = Opm::Impl::communicateExportedCells(exportedCells, cc, root);
     if (cc.rank() == root) {

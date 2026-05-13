@@ -420,6 +420,25 @@ zoltanSerialPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
                                         Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph,
                                         double coarseThreshold,
                                         int coarsePartitionMaxNodeSize);
+
+/// \brief Call serial Metis partitioner on CoarseGraph
+///
+std::tuple<std::vector<int>, std::vector<std::pair<std::string, bool>>,
+           std::vector<std::tuple<int,int,char> >,
+           std::vector<std::tuple<int,int,char,int> >,
+           Dune::cpgrid::WellConnections>
+metisSerialPartitioningWithCoarseGraph(const Dune::CpGrid& grid,
+                                       const std::vector<Dune::cpgrid::OpmWellType> * wells,
+                                       const std::unordered_map<std::string, std::set<int>>& possibleFutureConnections,
+                                       const Dune::cpgrid::CpGridDataTraits::Communication& cc,
+                                       Dune::EdgeWeightMethod edgeWeightMethod,
+                                       int root,
+                                       const double zoltanImbalanceTol,
+                                       bool allowDistributedWells,
+                                       const std::map<std::string,std::string>& params,
+                                       Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>>* transGraph,
+                                       double coarseThreshold,
+                                       int coarsePartitionMaxNodeSize);
 #endif // HAVE_MPI
 
 } // end namespace Opm
